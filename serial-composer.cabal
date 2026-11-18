@@ -1,0 +1,28 @@
+cabal-version:      3.0
+name:               serial-composer
+version:            0.1.0.0
+synopsis:           Atonal and serial matrix generator with MusicXML and LilyPond export
+license:            MIT
+author:             Composer
+maintainer:         composer@example.com
+build-type:         Simple
+
+common warnings
+    ghc-options: -Wall
+
+library
+    import:           warnings
+    exposed-modules:  SerialComposer
+    build-depends:    base >= 4.16 && < 5,
+                      random >= 1.2
+    hs-source-dirs:   src
+    default-language: Haskell2010
+
+executable serial-compose
+    import:           warnings
+    main-is:          Main.hs
+    build-depends:    base >= 4.16 && < 5,
+                      random >= 1.2,
+                      serial-composer
+    hs-source-dirs:   app
+    default-language: Haskell2010

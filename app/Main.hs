@@ -1,0 +1,209 @@
+module Main (main) where
+
+import Control.Applicative ((<|>))
+import Data.Char (isSpace, toUpper)
+import Data.List (elemIndex)
+import SerialComposer
+import System.Console.GetOpt
+import System.Environment (getArgs, getProgName)
+import System.Exit (exitFailure, exitSuccess)
+import System.Random (StdGen, getStdGen, mkStdGen)
+import Text.Read (readMaybe)
+
+data Options = Options
+  { optCustomRow :: Maybe String
+  , optLength    :: Int
+  , optMod       :: Int
+  , optSeed      :: Maybe Int
+  , optRoot      :: String
+  , optOctave    :: Maybe Int
+  , optMode      :: String -- "guitar", "bass", or "duo"
+  , optPlain     :: Bool
+  , optBpm       :: Int
+  , optOut       :: String
+  , optHelp      :: Bool
+  } deriving (Show)
+
+defaultOptions :: Options
+defaultOptions = Options
+  { optCustomRow = Nothing
+  , optLength    = 6
+  , optMod       = 12
+  , optSeed      = Nothing
+  , optRoot      = "C"
+  , optOctave    = Nothing
+  , optMode      = "duo"
+  , optPlain     = False
+  , optBpm       = 75
+  , optOut       = "serial_output"
+  , optHelp      = False
+  }
+
+options :: [OptDescr (Options -> Options)]
+options =
+  [ Option ['w'] ["row"]
+      (ReqArg (\v opts -> opts { optCustomRow = Just v }) "LIST")
+      "Custom comma-separated notes or integers, e.g. C,Db,Gb,G,Bb or 0,1,6,7,10"
+  , Option ['n'] ["length"]
+      (ReqArg (\v opts -> opts { optLength = read v }) "INT")
+      "Number of unique pitches in random row (default: 6)"
+  , Option ['m'] ["mod"]
+      (ReqArg (\v opts -> opts { optMod = read v }) "INT")
+      "Modulus / chromatic division (default: 12)"
+  , Option ['s'] ["seed"]
+      (ReqArg (\v opts -> opts { optSeed = Just (read v) }) "INT")
+      "Deterministic integer RNG seed (default: random system seed)"
+  , Option ['r'] ["root"]
+      (ReqArg (\v opts -> opts { optRoot = v }) "NOTE")
+      "Root note name: C, Db, D, Eb, E, F, Gb, G, Ab, A, Bb, B (default: C)"
+  , Option ['o'] ["octave"]
+      (ReqArg (\v opts -> opts { optOctave = Just (read v) }) "INT")
+      "Override base octave for guitar (default: auto based on root)"
+  , Option ['p'] ["part"]
+      (ReqArg (\v opts -> opts { optMode = v }) "MODE")
+      "Instrument mode: guitar, bass, or duo (default: duo)"
+  , Option [] ["plain"]
+      (NoArg (\opts -> opts { optPlain = True }))
+      "Use plain quarter notes without rhythm/octave displacement"
+  , Option ['t'] ["tempo"]
+      (ReqArg (\v opts -> opts { optBpm = read v }) "BPM")
+      "Tempo in BPM for LilyPond MIDI export (default: 75)"
+  , Option ['f'] ["out"]
+      (ReqArg (\v opts -> opts { optOut = v }) "PREFIX")
+      "Output filename prefix without extension (default: serial_output)"
+  , Option ['h'] ["help"]
+      (NoArg (\opts -> opts { optHelp = True }))
+      "Show this help message"
+  ]
+
+trim :: String -> String
+trim = f . f
+  where
+    f = reverse . dropWhile isSpace
+
+-- | Parses a single note name (C..B, flats or sharps, case-insensitive) to 0..11.
+parseNoteName :: String -> Maybe PitchClass
+parseNoteName str =
+  let norm = map toUpper (trim str)
+      flats = ["C", "DB", "D", "EB", "E", "F", "GB", "G", "AB", "A", "BB", "B"]
+      sharps = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+   in elemIndex norm flats <|> elemIndex norm sharps
+
+-- | Parses a single token as either an integer pitch class or a note name.
+parsePitchToken :: String -> Maybe PitchClass
+parsePitchToken tok =
+  let clean = trim tok
+   in readMaybe clean <|> parseNoteName clean
+
+-- | Parses a comma-separated list of integers and/or note names into a Row.
+parseCustomRow :: String -> Maybe Row
+parseCustomRow str =
+  let parts = splitCommas str
+   in if null parts || any (null . trim) parts
+        then Nothing
+        else traverse parsePitchToken parts
+  where
+    splitCommas :: String -> [String]
+    splitCommas s =
+      case break (== ',') s of
+        (chunk, [])       -> [chunk]
+        (chunk, _ : rest) -> chunk : splitCommas rest
+
+defaultGuitarOctave :: PitchClass -> Int
+defaultGuitarOctave pc
+  | pc >= 9   = 1 -- A1, Bb1, B1
+  | otherwise = 2 -- C2 .. Ab2
+
+buildParts :: Options -> PitchClass -> Matrix -> StdGen -> [PartSpec]
+buildParts opts rootPc mat gen =
+  let n = length mat
+      idx2 = min 2 (n - 1)
+      idx3 = min 3 (n - 1)
+      gtrOct = maybe (defaultGuitarOctave rootPc) id (optOctave opts)
+      bassOct = max 0 (gtrOct - 1)
+
+      gtrRows =
+        [ ("Section A (P0)", getPrime mat 0)
+        , ("Section B (I0)", getInversion mat 0)
+        ]
+      bassRows =
+        [ ("Section A (R" ++ show idx2 ++ ")", getRetrograde mat idx2)
+        , ("Section B (RI" ++ show idx3 ++ ")", getRetrogradeInversion mat idx3)
+        ]
+
+      (gtrSecs, g1) =
+        if optPlain opts
+          then ([(lbl, realizePlain rootPc gtrOct r) | (lbl, r) <- gtrRows], gen)
+          else realizeSectionsGroove rootPc gtrOct 2 25 gen gtrRows
+
+      (bassSecs, _) =
+        if optPlain opts
+          then ([(lbl, realizePlain rootPc bassOct r) | (lbl, r) <- bassRows], g1)
+          else realizeSectionsGroove rootPc bassOct 1 15 g1 bassRows
+
+      guitarPart = PartSpec "Distorted Guitar" "guitar" "distorted guitar" gtrSecs
+      bassPart = PartSpec "Distorted Bass" "bass" "electric bass (pick)" bassSecs
+   in case optMode opts of
+        "guitar" -> [guitarPart]
+        "bass"   -> [bassPart]
+        _        -> [guitarPart, bassPart]
+
+main :: IO ()
+main = do
+  args <- getArgs
+  progName <- getProgName
+  let header = "Usage: " ++ progName ++ " [OPTIONS...]"
+
+  opts <- case getOpt Permute options args of
+    (o, _, []) -> return (foldl (flip id) defaultOptions o)
+    (_, _, errs) -> do
+      putStrLn (concat errs ++ usageInfo header options)
+      exitFailure
+
+  if optHelp opts
+    then do
+      putStrLn (usageInfo header options)
+      exitSuccess
+    else return ()
+
+  rootPc <- case parseNoteName (optRoot opts) of
+    Just pc -> return pc
+    Nothing -> do
+      putStrLn $ "Error: Unknown root note '" ++ optRoot opts ++ "'."
+      exitFailure
+
+  sysGen <- getStdGen
+  let initGen = maybe sysGen mkStdGen (optSeed opts)
+
+  (row, genAfterRow) <- case optCustomRow opts of
+    Nothing -> return $ randomRow (optMod opts) (optLength opts) initGen
+    Just rawStr ->
+      case parseCustomRow rawStr of
+        Just r  -> return (r, initGen)
+        Nothing -> do
+          putStrLn $
+            "Error: Invalid --row format '" ++ rawStr
+              ++ "'. Expected comma-separated notes (C,Db,Gb) or integers (0,1,6)."
+          exitFailure
+
+  let mat = generateMatrix (optMod opts) row
+
+  putStrLn $ "=== Matrix (" ++ show (length row) ++ "-Tone Row, mod " ++ show (optMod opts) ++ ") ==="
+  putStrLn $ "Input Row:     " ++ show row
+  putStrLn $ "Root Tuning:   " ++ optRoot opts ++ "\n"
+
+  putStrLn "--- Integer Matrix ---"
+  printMatrix mat
+  putStrLn "\n--- Transposed Note Matrix ---"
+  printNoteMatrix rootPc mat
+
+  let parts = buildParts opts rootPc mat genAfterRow
+      xmlFile = optOut opts ++ ".musicxml"
+      lyFile = optOut opts ++ ".ly"
+
+  exportMusicXMLParts xmlFile parts
+  exportLilyPondParts lyFile (optBpm opts) parts
+
+  putStrLn "\nExported:"
+  putStrLn $ "  -> " ++ xmlFile
+  putStrLn $ "  -> " ++ lyFile
