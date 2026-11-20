@@ -17,6 +17,8 @@ module SerialComposer
   , NoteEvent(..)
   , PartSpec(..)
   , SegmentInfo(..)
+  , deriveRow12
+  , allIntervalRow12
   , partitionRow
   , slidingSegments
   , analyzeSegments
@@ -38,7 +40,7 @@ module SerialComposer
   ) where
 
 import Prelude hiding (span)
-import Data.List (sortBy, intercalate)
+import Data.List (sortBy, intercalate, nub)
 import Data.Ord (comparing)
 import System.Random (StdGen, randomR, randoms, split)
 import Text.Printf (printf)
@@ -412,3 +414,115 @@ printSegLine rootOffset (idx, info) = do
           ++ " " ++ iv
   where
     padRight len str = str ++ replicate (max 0 (len - length str)) ' '
+
+
+--------------------------------------------------------------------------------
+-- Derived & All-Interval 12-Tone Row Generators
+--------------------------------------------------------------------------------
+
+-- | Generates a 12-tone row derived from a 3-note trichord or 4-note tetrachord cell.
+-- Every discrete partition of size @k@ (4 trichords or 3 tetrachords) is a Tn or TnI
+-- transformation of @cell@, and together they cover all 12 pitch classes without repetition.
+-- Returns @Nothing@ if @cell@ does not have 3 or 4 unique pitch classes, or if no valid
+-- derived partition exists (e.g., symmetric cells like 3-12 [0,4,8] or 4-28 [0,3,6,9]).
+deriveRow12 :: [PitchClass] -> StdGen -> (Maybe [PitchClass], StdGen)
+deriveRow12 rawCell gen0 =
+  let cell = PCS.makeSet rawCell
+      k = length cell
+   in if k /= 3 && k /= 4
+        then (Nothing, gen0)
+        else
+          let numBlocks = 12 `div` k
+              -- All Tn and TnI forms of the generator cell
+              transforms = nub $
+                [ PCS.transposeSet t cell | t <- enumFromTo 0 11 ]
+                ++ [ PCS.invertSet t cell | t <- enumFromTo 0 11 ]
+              -- Backtracking search for disjoint blocks covering 0..11
+              search 0 _ _ = [[]]
+              search step minStart used =
+                [ blk : rest
+                | blk <- transforms
+                , case blk of
+                    (firstPc : _) -> firstPc >= minStart
+                    _             -> False
+                , all (`notElem` used) blk
+                , let nextMin = case blk of
+                                  (firstPc : _) -> firstPc + 1
+                                  _             -> minStart + 1
+                , rest <- search (step - 1) nextMin (blk ++ used)
+                ]
+              solutions = search numBlocks 0 mempty
+
+          in case solutions of
+                [] -> (Nothing, gen0)
+                _  ->
+                  let (solIdx, gen1) = randomR (0, length solutions - 1) gen0
+                      chosenBlocks = solutions !! solIdx
+                      -- Shuffle block order and pitch order inside each block
+                      (shuffledBlocks, gen2) = shuffleList chosenBlocks gen1
+                      (orderedBlocks, gen3)  = mapAccumShuffle shuffledBlocks gen2
+                   in (Just (concat orderedBlocks), gen3)
+  where
+    mapAccumShuffle [] g = ([], g)
+    mapAccumShuffle (b : bs) g =
+      let (sb, g1)  = shuffleList b g
+          (sbs, g2) = mapAccumShuffle bs g1
+       in (sb : sbs, g2)
+
+-- | Generates a random All-Interval 12-tone row (where the 11 directed mod-12
+-- intervals between consecutive pitches contain every interval 1..11 exactly once).
+allIntervalRow12 :: StdGen -> ([PitchClass], StdGen)
+allIntervalRow12 gen0 = go gen0
+  where
+    go g =
+      let (startPc, g1) = randomR (0, 11) g
+          (res, g2) = backtrack [startPc] [startPc] mempty g1
+       in case res of
+            Just row -> (row, g2)
+            Nothing  -> go g2
+
+    backtrack :: [PitchClass] -> [PitchClass] -> [Int] -> StdGen -> (Maybe [PitchClass], StdGen)
+    backtrack revRow usedPcs usedInts g
+      | length revRow == 12 = (Just (reverse revRow), g)
+      | otherwise =
+          let curr = case revRow of
+                       (x : _) -> x
+                       _       -> 0
+              remSteps = 12 - length revRow
+              -- In any all-interval 12-tone row, first and last pitch must differ by tritone (6)
+              candidates =
+                [ (nextPc, iv)
+                | iv <- enumFromTo 1 11
+                , iv `notElem` usedInts
+                , let nextPc = (curr + iv) `mod` 12
+                , nextPc `notElem` usedPcs
+                , remSteps > 1 || ((nextPc - lastPc revRow) `mod` 12 == 6)
+                ]
+              (shuffledCands, g1) = shuffleList candidates g
+           in tryCandidates shuffledCands g1
+      where
+        lastPc [x]      = x
+        lastPc (_ : xs) = lastPc xs
+        lastPc _        = 0
+
+        tryCandidates [] gCur = (Nothing, gCur)
+        tryCandidates ((nextPc, iv) : rest) gCur =
+          let (attempt, gNext) = backtrack (nextPc : revRow) (nextPc : usedPcs) (iv : usedInts) gCur
+           in case attempt of
+                Just sol -> (Just sol, gNext)
+                Nothing  -> tryCandidates rest gNext
+
+-- | Pure Fisher-Yates style list shuffle using StdGen.
+shuffleList :: [a] -> StdGen -> ([a], StdGen)
+shuffleList [] g = ([], g)
+shuffleList xs g =
+  let (idx, g1) = randomR (0, length xs - 1) g
+      (picked, rest) = extractAt idx xs
+      (tailShuffled, g2) = shuffleList rest g1
+   in (picked : tailShuffled, g2)
+  where
+    extractAt _ [] = error "extractAt: empty list"
+    extractAt 0 (y : ys) = (y, ys)
+    extractAt n (y : ys) =
+      let (p, r) = extractAt (n - 1) ys
+       in (p, y : r)

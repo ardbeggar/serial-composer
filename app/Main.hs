@@ -1,6 +1,7 @@
 module Main (main) where
 
 import Control.Applicative ((<|>))
+import Control.Monad (when)
 import Data.Char (isSpace, toUpper)
 import Data.List (elemIndex)
 import SerialComposer
@@ -11,34 +12,38 @@ import System.Random (StdGen, getStdGen, mkStdGen)
 import Text.Read (readMaybe)
 
 data Options = Options
-  { optCustomRow :: Maybe String
-  , optLength    :: Int
-  , optMod       :: Int
-  , optSeed      :: Maybe Int
-  , optRoot      :: String
-  , optOctave    :: Maybe Int
-  , optMode      :: String -- "guitar", "bass", or "duo"
-  , optAnalyze   :: Bool
-  , optPlain     :: Bool
-  , optBpm       :: Int
-  , optOut       :: String
-  , optHelp      :: Bool
+  { optCustomRow   :: Maybe String
+  , optDeriveCell  :: Maybe String
+  , optAllInterval :: Bool
+  , optLength      :: Int
+  , optMod         :: Int
+  , optSeed        :: Maybe Int
+  , optRoot        :: String
+  , optOctave      :: Maybe Int
+  , optMode        :: String -- "guitar", "bass", or "duo"
+  , optAnalyze     :: Bool
+  , optPlain       :: Bool
+  , optBpm         :: Int
+  , optOut         :: String
+  , optHelp        :: Bool
   } deriving (Show)
 
 defaultOptions :: Options
 defaultOptions = Options
-  { optCustomRow = Nothing
-  , optLength    = 6
-  , optMod       = 12
-  , optSeed      = Nothing
-  , optRoot      = "C"
-  , optOctave    = Nothing
-  , optMode      = "duo"
-  , optAnalyze   = False
-  , optPlain     = False
-  , optBpm       = 75
-  , optOut       = "serial_output"
-  , optHelp      = False
+  { optCustomRow   = Nothing
+  , optDeriveCell  = Nothing
+  , optAllInterval = False
+  , optLength      = 6
+  , optMod         = 12
+  , optSeed        = Nothing
+  , optRoot        = "C"
+  , optOctave      = Nothing
+  , optMode        = "duo"
+  , optAnalyze     = False
+  , optPlain       = False
+  , optBpm         = 75
+  , optOut         = "serial_output"
+  , optHelp        = False
   }
 
 options :: [OptDescr (Options -> Options)]
@@ -46,6 +51,12 @@ options =
   [ Option ['w'] ["row"]
       (ReqArg (\v opts -> opts { optCustomRow = Just v }) "LIST")
       "Custom comma-separated notes or integers, e.g. C,Db,Gb,G,Bb or 0,1,6,7,10"
+  , Option ['d'] ["derive"]
+      (ReqArg (\v opts -> opts { optDeriveCell = Just v }) "CELL")
+      "Generate a 12-tone derived row from a 3- or 4-note cell (e.g. 0,1,6 or C,Db,Gb)"
+  , Option ['i'] ["all-interval"]
+      (NoArg (\opts -> opts { optAllInterval = True }))
+      "Generate a 12-tone all-interval row (contains every interval 1..11 once)"
   , Option ['n'] ["length"]
       (ReqArg (\v opts -> opts { optLength = read v }) "INT")
       "Number of unique pitches in random row (default: 6)"
@@ -165,6 +176,8 @@ main = do
       putStrLn (concat errs ++ usageInfo header options)
       exitFailure
 
+  let m = optMod opts
+
   if optHelp opts
     then do
       putStrLn (usageInfo header options)
@@ -180,16 +193,39 @@ main = do
   sysGen <- getStdGen
   let initGen = maybe sysGen mkStdGen (optSeed opts)
 
-  (row, genAfterRow) <- case optCustomRow opts of
-    Nothing -> return $ randomRow (optMod opts) (optLength opts) initGen
-    Just rawStr ->
-      case parseCustomRow rawStr of
-        Just r  -> return (r, initGen)
-        Nothing -> do
-          putStrLn $
-            "Error: Invalid --row format '" ++ rawStr
-              ++ "'. Expected comma-separated notes (C,Db,Gb) or integers (0,1,6)."
+  (row, genAfterRow) <-
+    if optAllInterval opts
+    then do
+      when (m /= 12) $ do
+        putStrLn "Error: --all-interval requires --mod 12."
+        exitFailure
+      return (allIntervalRow12 initGen)
+    else case optDeriveCell opts of
+      Just cellStr -> do
+        when (m /= 12) $ do
+          putStrLn "Error: --derive requires --mod 12."
           exitFailure
+        case parseCustomRow cellStr of
+          Nothing -> do
+            putStrLn $ "Error: Invalid generator cell '" ++ cellStr ++ "'."
+            exitFailure
+          Just cell ->
+            case deriveRow12 cell initGen of
+              (Nothing, _) -> do
+                putStrLn $ "Error: Cannot derive a 12-tone row from " ++ show cell
+                        ++ " (requires 3 or 4 non-symmetric pitch classes)."
+                exitFailure
+              (Just derived, gNext) -> return (derived, gNext)
+      Nothing ->
+        case optCustomRow opts of
+          Just rStr ->
+            case parseCustomRow rStr of
+              Just parsed -> return (parsed, initGen)
+              Nothing -> do
+                putStrLn $ "Error: Could not parse custom row '" ++ rStr ++ "'."
+                exitFailure
+          Nothing ->
+            return (randomRow m (optLength opts) initGen)
 
   let mat = generateMatrix (optMod opts) row
 
