@@ -22,6 +22,8 @@ data Options = Options
   , optOctave      :: Maybe Int
   , optMode        :: String -- "guitar", "bass", or "duo"
   , optAnalyze     :: Bool
+  , optM5          :: Bool
+  , optM7          :: Bool
   , optInvariance  :: Bool
   , optPlain       :: Bool
   , optBpm         :: Int
@@ -41,6 +43,8 @@ defaultOptions = Options
   , optOctave      = Nothing
   , optMode        = "duo"
   , optAnalyze     = False
+  , optM5          = False
+  , optM7          = False
   , optInvariance  = False
   , optPlain       = False
   , optBpm         = 75
@@ -80,6 +84,12 @@ options =
   , Option ['a'] ["analyze"]
       (NoArg (\opts -> opts { optAnalyze = True }))
       "Print Forte pitch-class set segmentation of P0 (requires --mod 12)"
+  , Option [] ["m5"]
+      (NoArg (\opts -> opts { optM5 = True }))
+      "Apply M5 cycle-of-fourths transform (x -> 5x mod m) to the row"
+  , Option [] ["m7"]
+      (NoArg (\opts -> opts { optM7 = True }))
+      "Apply M7 cycle-of-fifths transform (x -> 7x mod m) to the row"
   , Option ['v'] ["invariance"]
       (NoArg (\opts -> opts { optInvariance = True }))
       "Scan all 4N matrix forms for segment, pitch-set, and positional invariance"
@@ -198,7 +208,7 @@ main = do
   sysGen <- getStdGen
   let initGen = maybe sysGen mkStdGen (optSeed opts)
 
-  (row, genAfterRow) <-
+  (rawRow, genAfterRow) <-
     if optAllInterval opts
     then do
       when (m /= 12) $ do
@@ -231,6 +241,11 @@ main = do
                 exitFailure
           Nothing ->
             return (randomRow m (optLength opts) initGen)
+
+  let row
+        | optM5 opts = m5Row m rawRow
+        | optM7 opts = m7Row m rawRow
+        | otherwise  = rawRow
 
   let mat = generateMatrix (optMod opts) row
 

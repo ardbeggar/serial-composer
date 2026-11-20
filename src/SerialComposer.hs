@@ -42,6 +42,10 @@ module SerialComposer
   , allRowForms
   , scanRowInvariance
   , printRowInvariance
+
+  , multiplyRow
+  , m5Row
+  , m7Row
   ) where
 
 import Prelude hiding (span)
@@ -94,6 +98,18 @@ generateMatrix m p0@(first : _) =
   let normP0 = map (\x -> (x - first) `mod` m) p0
       i0 = map (\x -> (-x) `mod` m) normP0
    in [map (\p -> (i + p) `mod` m) normP0 | i <- i0]
+
+-- | Applies an ordered multiplicative transform @x -> (k * x) mod m@ to a row.
+multiplyRow :: Int -> Int -> [PitchClass] -> [PitchClass]
+multiplyRow m k = map (\x -> (k * x) `mod` m)
+
+-- | Transforms an ordered row via M5 (cycle of fourths, @x -> 5x mod m@).
+m5Row :: Int -> [PitchClass] -> [PitchClass]
+m5Row m = multiplyRow m 5
+
+-- | Transforms an ordered row via M7 (cycle of fifths, @x -> 7x mod m@).
+m7Row :: Int -> [PitchClass] -> [PitchClass]
+m7Row m = multiplyRow m 7
 
 getPrime, getRetrograde, getInversion, getRetrogradeInversion :: Matrix -> Int -> Row
 getPrime mat idx = mat !! idx

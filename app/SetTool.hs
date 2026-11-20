@@ -177,6 +177,17 @@ printAnalysis pcs = do
     Nothing ->
       putStrLn "Z-Related Mate:     None"
 
+  let m5 = m5Set pcs
+      m7 = m7Set pcs
+  putStrLn $ "M5 Transform (x5):  " ++ formatSet m5
+          ++ " -> Forte " ++ forteName m5
+          ++ " (" ++ intercalate "," (map show (primeForm m5)) ++ ") "
+          ++ formatVector (intervalVector m5)
+  putStrLn $ "M7 Transform (x7):  " ++ formatSet m7
+          ++ " -> Forte " ++ forteName m7
+          ++ " (" ++ intercalate "," (map show (primeForm m7)) ++ ") "
+          ++ formatVector (intervalVector m7)
+
   putStrLn "\n--- Transpositional Common Tones (Tn) ---"
   putStrLn $ unwords [ printf "T%d:%d" t count | (t, count) <- ct ]
 

@@ -50,6 +50,10 @@ module PitchClassSet
 
   , VoiceLeadingMove(..)
   , minimalVoiceLeading
+
+  , multiplySet
+  , m5Set
+  , m7Set
   ) where
 
 import Data.List (find, intercalate, minimumBy, nub, permutations, sort, subsequences, tails)
@@ -77,6 +81,19 @@ transposeSet n = makeSet . map (+ n)
 -- | Inverts a set around 0 and transposes by @n@ (TnI).
 invertSet :: Int -> PCSet -> PCSet
 invertSet n = makeSet . map (\x -> n - x)
+
+-- | Applies multiplicative transformation @x -> (k * x) mod 12@ to a pitch-class set.
+-- For @k = 5@ (M5) and @k = 7@ (M7), this is a bijection on Z12 swapping ic1 and ic5.
+multiplySet :: Int -> PCSet -> PCSet
+multiplySet k = makeSet . map (* k)
+
+-- | Cycle-of-fourths multiplicative transform: @x -> (5 * x) mod 12@.
+m5Set :: PCSet -> PCSet
+m5Set = multiplySet 5
+
+-- | Cycle-of-fifths multiplicative transform: @x -> (7 * x) mod 12@.
+m7Set :: PCSet -> PCSet
+m7Set = multiplySet 7
 
 -- | Computes all cyclic rotations of a sorted list.
 rotations :: [a] -> [[a]]
