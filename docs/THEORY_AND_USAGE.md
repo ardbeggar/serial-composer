@@ -11,6 +11,10 @@ This guide explains the set-theory concepts implemented in `PitchClassSet` and `
 - **Transposition (`Tn`):** Shifts every pitch class up by `n` semitones: `(x + n) mod 12`.
 - **Inversion (`TnI`):** Reflects every pitch class around `0` and transposes by `n`: `(n - x) mod 12`.
 
+### Multiplicative Operators (`M5` and `M7`)
+- Together with `T0` (`x -> x`) and `I0` (`x -> 11x mod 12`), **`M5` (`x -> 5x mod 12`, cycle of fourths)** and **`M7` (`x -> 7x mod 12`, cycle of fifths)** are the only bijective linear operations on modulo-12 pitch-class space.
+- `M5` and `M7` swap **interval-class 1** (semitones) with **interval-class 5** (perfect fourths/fifths) while keeping `ic2`, `ic3`, `ic4`, and `ic6` (tritones) invariant.
+
 ### Normal Order & Prime Form
 - **Normal Order:** The most compact ascending cyclic rotation of a pitch-class set (smallest outer interval span, breaking ties by packing intervals to the left).
 - **Prime Form:** The most compact zero-normalized form (`0` as the first element) chosen between a set's Normal Order and its Inversion's Normal Order. Two sets share the same **Forte Name** (e.g., `3-5`, `4-Z15`) if and only if they have the same Prime Form.
@@ -42,37 +46,51 @@ A 6-note hexachord `H` is **combinatorial** with a transformation `X(H)` if `H` 
 - **I / RI Combinatorial:** `TnI(H) = Complement(H)` for at least one `n ∈ 0..11`.
 - **All-Combinatorial:** Satisfies both `P/R` and `I/RI` combinatoriality (the 6 all-combinatorial hexachords are `6-1`, `6-7`, `6-8`, `6-20`, `6-32`, and `6-35`).
 
+### Minimal Voice-Leading Distance (`L1` Taxicab Metric)
+Given a concrete pitch-class set `A` and a target set class `B` of equal cardinality, `minimalVoiceLeading` tests every `Tn` and `TnI` form of `B` and solves for the optimal note-to-note bijection that minimizes total semitone motion (`sum |delta_i|`), identifying the smoothest parsimonious voice-leading paths.
+
 ---
 
-## 2. Combined Composition Workflows
+## 2. Serial Matrix & Rotational Techniques (`SerialComposer`)
 
-### Workflow A: Building a Derived 12-Tone Row from a Core Cell
+### 4N Row-Invariance Scanner (`--invariance`)
+Scans all `4N` forms (`P`, `R`, `I`, `RI`) of a matrix against `P0` to find:
+- Transformations preserving the exact unordered pitch-class set (when `N < 12`).
+- Transformations preserving discrete `k`-note partitions (trichords, tetrachords, hexachords) either in exact slot order or permuted across slots.
+- Transformations locking pitches into identical ordinal positions.
+
+### Stravinsky Rotational Arrays (`--rotate`)
+Given an `N`-note row, generates all `N` cyclic rotations and transposes each rotation so its first pitch class matches the initial pitch of `P0` (alpha-transposition). Reading down columns `1 .. N-1` yields `N - 1` vertical chords, each analyzed with its Forte set-class name and interval vector.
+
+---
+
+## 3. Combined Composition Workflows
+
+### Workflow A: Building & Transforming a Derived 12-Tone Row
 1. **Pick a core trichord or tetrachord** (e.g., `3-5` `(0,1,6)` — minor second + tritone).
-2. **Generate a 12-tone row where all 4 discrete trichords are `Tn`/`TnI` forms of `3-5`:**
+2. **Generate a 12-tone derived row, inspect its segments, and scan all 48 matrix forms for segment-preserving counter-rows:**
    ```bash
-   cabal run serial-compose -- --derive 0,1,6 -r B --seed 42 --analyze --plain -f derived_3_5
+   cabal run serial-compose -- --derive 0,1,6 -r B --seed 42 --analyze --invariance --plain -f derived_3_5
    ```
-3. **Open `derived_3_5.musicxml` in MuseScore** to shape register, rhythm, and phrasing.
+3. **Create a contrasting open quartal/quintal variation using `--m5`:**
+   ```bash
+   cabal run serial-compose -- --derive 0,1,6 -r B --seed 42 --m5 --analyze --plain -f derived_m5
+   ```
 
-### Workflow B: Unifying Multi-Section Harmony with Nexus Sets
-1. **Collect the main harmonic cells across your sections** (e.g., `3-5`, `4-Z15`, and `5-19`).
-2. **Find all `K` and `Kh` nexus sets connecting them:**
+### Workflow B: Generating Harmony from a Short Row via Rotational Arrays
+1. **Start with a 5- or 6-note row** (e.g., `[0,1,6,7,10]` in Drop B).
+2. **Generate the Stravinsky rotational array and inspect its vertical column chords:**
+   ```bash
+   cabal run serial-compose -- -w "0,1,6,7,10" -r B --rotate --invariance
+   ```
+3. Use the vertical columns as a chord progression and the invariant `P`/`R`/`I`/`RI` forms as melodic counter-lines.
+
+### Workflow C: Parsimonious Voice-Leading & Nexus Set Bridging
+1. **Find the smoothest voice-leading from one chord to another set class:**
+   ```bash
+   cabal run set-tool -- voicelead 0,1,6,7 4-Z15
+   ```
+2. **Find a `Kh` nexus hexachord that unifies multiple cells across sections:**
    ```bash
    cabal run set-tool -- nexus 3-5 4-Z15 5-19
-   ```
-3. Use a strict `Kh` nexus hexachord (such as `6-Z19` or `6-Z44`) to bridge sections while preserving subset/superset coherence.
-
-### Workflow C: Voice-Leading & Combinatorial Aggregate Counterpoint
-1. **Check `Tn` and `TnI` common-tone invariance** for a harmonic cell:
-   ```bash
-   cabal run set-tool -- 0,1,6,7
-   ```
-   Look at both `Tn` and `TnI` vectors (e.g., `T6:4` or `T1I:4`) to find transpositions or inversions that retain the most shared pitches.
-2. **Verify exact transformations between two specific voicings:**
-   ```bash
-   cabal run set-tool -- 0,1,6,7 2,3,8,9
-   ```
-3. **Test a hexachord for aggregate counterpoint** (e.g., Guitar playing `P0` while Bass plays an `I`-combinatorial inversion `TnI` to complete all 12 pitch classes):
-   ```bash
-   cabal run set-tool -- comb 6-7
    ```

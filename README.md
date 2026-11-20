@@ -1,6 +1,6 @@
 # SerialComposer
 
-`SerialComposer` is a pure Haskell library suite and set of command-line tools (`serial-compose` and `set-tool`) for **N × N serial matrix generation**, **derived and all-interval row construction**, **Allen Forte pitch-class set theory analysis**, and **MusicXML / LilyPond score export**.
+`SerialComposer` is a pure Haskell library suite and set of command-line tools (`serial-compose` and `set-tool`) for **N × N serial matrix generation**, **derived and all-interval row construction**, **Stravinsky rotational arrays**, **Allen Forte pitch-class set theory analysis**, and **MusicXML / LilyPond score export**.
 
 See [docs/THEORY_AND_USAGE.md](docs/THEORY_AND_USAGE.md) for mathematical definitions and combined composition workflows.
 
@@ -18,8 +18,8 @@ serial-composer/
 │   ├── Main.hs           (serial-compose CLI)
 │   └── SetTool.hs        (set-tool CLI)
 └── src/
-    ├── SerialComposer.hs (N x N matrix engine, derived/all-interval rows, score export)
-    └── PitchClassSet.hs  (Forte catalog, K/Kh complexes, combinatoriality, Tn/TnI solver)
+    ├── SerialComposer.hs (N x N matrix, invariance, rotational arrays, M5/M7, score export)
+    └── PitchClassSet.hs  (Forte catalog, K/Kh complexes, combinatoriality, voice-leading, Tn/TnI)
 ```
 
 ---
@@ -65,6 +65,8 @@ Run via `cabal run serial-compose -- [OPTIONS...]` or using the installed `seria
 | `-w` | `--row` | `LIST` | Custom comma-separated notes or integers, e.g. `C,Db,Gb,G,Bb` or `0,1,6,7,10` (overrides `--length`) |
 | `-d` | `--derive` | `CELL` | Generate a 12-tone derived row from a 3- or 4-note cell (e.g. `0,1,6` or `C,Db,Gb`) |
 | `-i` | `--all-interval` | | Generate a 12-tone all-interval row (contains every interval `1..11` once) |
+| | `--m5` | | Apply `M5` cycle-of-fourths transform (`x -> 5x mod m`) to the row |
+| | `--m7` | | Apply `M7` cycle-of-fifths transform (`x -> 7x mod m`) to the row |
 | `-n` | `--length` | `INT` | Number of unique pitches in random row (default: `6`) |
 | `-m` | `--mod` | `INT` | Modulus / chromatic division (default: `12`) |
 | `-s` | `--seed` | `INT` | Deterministic integer RNG seed (default: random system seed) |
@@ -72,7 +74,9 @@ Run via `cabal run serial-compose -- [OPTIONS...]` or using the installed `seria
 | `-o` | `--octave` | `INT` | Override base octave for guitar (default: auto based on root) |
 | `-p` | `--part` | `MODE` | Instrument mode: `guitar`, `bass`, or `duo` (default: `duo`) |
 | | `--plain` | | Use plain quarter notes without rhythm/octave displacement |
-| `-a` | `--analyze` | | Print Forte pitch-class set segmentation of P0 (requires `--mod 12`) |
+| `-a` | `--analyze` | | Print Forte pitch-class set segmentation of `P0` (requires `--mod 12`) |
+| `-v` | `--invariance` | | Scan all `4N` matrix forms for segment, pitch-set, and positional invariance |
+| `-R` | `--rotate` | | Print Stravinsky rotational array and vertical column Forte analysis |
 | `-t` | `--tempo` | `BPM` | Tempo in BPM for LilyPond MIDI export (default: `75`) |
 | `-f` | `--out` | `PREFIX` | Output filename prefix without extension (default: `serial_output`) |
 | `-h` | `--help` | | Show help message |
@@ -85,34 +89,35 @@ Run via `cabal run serial-compose -- [OPTIONS...]` or using the installed `seria
 cabal run serial-compose -- --length 5 --root B --seed 42 --tempo 68 --out doom_b
 ```
 
-**Generate a 12-tone row derived from trichord `3-5` (`0,1,6`) and verify its partitions:**
+**Generate a 12-tone row derived from trichord `3-5` (`0,1,6`), inspect segments and `4N` invariance:**
 
 ```bash
-cabal run serial-compose -- --derive 0,1,6 -r B --seed 42 --analyze --plain -f derived_3_5
+cabal run serial-compose -- --derive 0,1,6 -r B --seed 42 --analyze --invariance --plain -f derived_3_5
 ```
 
-**Generate a 12-tone all-interval row in Drop D:**
+**Transform a row through `M5` (circle of fourths) and inspect its Stravinsky rotational array:**
 
 ```bash
-cabal run serial-compose -- --all-interval -r D --seed 7 --analyze -f all_interval_d
+cabal run serial-compose -- -w "0,1,6,7,10" -r D --m5 --rotate --analyze
 ```
 
 ---
 
 ## 3. Pitch-Class Set Theory Tool (`set-tool`)
 
-`set-tool` implements Allen Forte's *The Structure of Atonal Music*, including the complete 208-class Forte catalog (`3-1` through `9-12`), Normal Order, Prime Form, Interval-Class Vectors, Z-relations, similarity relations (`R1`, `R2`, `Rp`), abstract superset/subset searches, `K`/`Kh` set-complexes, nexus set discovery, hexachordal combinatoriality, and exact `Tn`/`TnI` mapping solvers.
+`set-tool` implements Allen Forte's *The Structure of Atonal Music*, including the complete 208-class Forte catalog (`3-1` through `9-12`), Normal Order, Prime Form, Interval-Class Vectors, Z-relations, similarity relations (`R1`, `R2`, `Rp`), `M5`/`M7` transforms, abstract superset/subset searches, `K`/`Kh` set-complexes, nexus set discovery, hexachordal combinatoriality, exact `Tn`/`TnI` mapping solvers, and minimal voice-leading distance.
 
 ### Commands
 
 | Command | Description |
 | :--- | :--- |
-| `set-tool <set-or-forte-name>` | Full analysis: Normal Order, Prime Form, Interval Vector, Complement, Z-Mate, `Tn` & `TnI` common tones, internal symmetry, `R1`/`R2`/`Rp` similar sets, and embedded trichords |
+| `set-tool <set-or-forte-name>` | Full analysis: Normal Order, Prime Form, Interval Vector, Complement, Z-Mate, `M5`/`M7` transforms, `Tn` & `TnI` common tones, internal symmetry, `R1`/`R2`/`Rp` similar sets, and embedded trichords |
 | `set-tool <set-1> <set-2>` | Compare two sets: `Tn`/`TnI` equivalence, exact `Tn`/`TnI` mapping (`A -> B`), Z-relation, and `R1`/`R2`/`Rp` similarity |
+| `set-tool voicelead <src> <target>` | Find the most parsimonious `Tn`/`TnI` voice-leadings from `<src>` to `<target>` with minimum total semitone displacement |
 | `set-tool supersets <set> [card]` | Find all Forte catalog supersets containing `<set>` (optionally filtered to cardinality `card`), with embedding multiplicity `[xN]` |
 | `set-tool subsets <set> [card]` | Find all Forte catalog subsets contained in `<set>` (optionally filtered to cardinality `card`), with embedding multiplicity `[xN]` |
 | `set-tool complex <set>` | List all members of Forte Set-Complex `K` and Subcomplex `Kh` around `<set>` and its complement |
-| `set-tool nexus <set1> <set2> [...]` | Find every catalog nexus set class holding a `K` or `Kh` relation with all given sets simultaneously |
+| `set-tool nexus <set1> <set2>` | Find every catalog nexus set class holding a `K` or `Kh` relation with all given sets simultaneously |
 | `set-tool comb <hexachord>` | Analyze a 6-note hexachord for `P`/`R` and `I`/`RI` aggregate combinatoriality |
 
 ### Examples
@@ -123,6 +128,12 @@ cabal run serial-compose -- --all-interval -r D --seed 7 --analyze -f all_interv
 cabal run set-tool -- 0,1,4,6
 cabal run set-tool -- C,Db,Gb,G,Bb
 cabal run set-tool -- 4-Z15
+```
+
+**Find minimal voice-leading distance from `4-9` (`0,1,6,7`) to any `Tn`/`TnI` form of `4-Z15`:**
+
+```bash
+cabal run set-tool -- voicelead 0,1,6,7 4-Z15
 ```
 
 **Solve exact `Tn`/`TnI` mappings or compare Z-mates and similarity:**
@@ -182,15 +193,16 @@ import SerialComposer
 import PitchClassSet
 import System.Random (mkStdGen)
 
--- Analyze a set using PitchClassSet
-let s = makeSet [0,1,3,6,7]
-forteName s                 -- "5-19"
-solveTransformations [0,1,6,7] [2,3,8,9]
-analyzeCombinatoriality [0,1,2,6,7,8]
+-- Analyze a set and compute minimal voice-leading
+let s = makeSet [0,1,6,7]
+minimalVoiceLeading s [0,1,4,6]
+m5Set s
 
--- Generate a derived 12-tone row and inspect its Forte segmentation
+-- Generate a derived 12-tone row, scan 4N invariance, and print its rotational array
 let (Just dRow, _) = deriveRow12 [0,1,6] (mkStdGen 42)
 printRowSegmentation 11 dRow
+printRowInvariance 12 11 dRow
+printRotationalArray 12 11 [0,1,6,7,10]
 ```
 
 ---
