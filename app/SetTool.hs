@@ -154,6 +154,8 @@ printAnalysis :: PCSet -> IO ()
 printAnalysis pcs = do
   let no   = normalOrder pcs
       pf   = primeForm pcs
+      rNo  = rahnNormalOrder pcs
+      rPf  = rahnPrimeForm pcs
       fNum = forteName pcs
       iv   = intervalVector pcs
       comp = complementSet pcs
@@ -163,7 +165,11 @@ printAnalysis pcs = do
   putStrLn $ "Forte Name:         " ++ fNum
   putStrLn $ "Input Set (sorted): " ++ formatSet pcs ++ " (Cardinality: " ++ show (length pcs) ++ ")"
   putStrLn $ "Normal Order:       " ++ formatSet no
+          ++ if rNo /= no then "  (Rahn: " ++ formatSet rNo ++ ")" else ""
   putStrLn $ "Prime Form:         (" ++ intercalate "," (map show pf) ++ ")"
+          ++ if rPf /= pf
+               then "  (Rahn: (" ++ intercalate "," (map show rPf) ++ "))"
+               else "  (Forte & Rahn identical)"
   putStrLn $ "Interval Vector:    " ++ formatVector iv
   putStrLn $ "Complement Set:     " ++ formatSet comp
           ++ " -> Forte " ++ forteName comp

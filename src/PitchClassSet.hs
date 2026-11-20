@@ -54,6 +54,9 @@ module PitchClassSet
   , multiplySet
   , m5Set
   , m7Set
+
+  , rahnNormalOrder
+  , rahnPrimeForm
   ) where
 
 import Data.List (find, intercalate, minimumBy, nub, permutations, sort, subsequences, tails)
@@ -132,6 +135,38 @@ primeForm raw =
           let normOrig = zeroNormalize (normalOrder s)
               normInv  = zeroNormalize (normalOrder (invertSet 0 s))
            in minimumBy compareSpan [normOrig, normInv]
+
+-- | Compares two cyclic rotations for Rahn Normal Order (most compact to the right):
+-- 1. Smallest outer span (last - first mod 12)
+-- 2. Smallest interval from first element to second, third, ..., penultimate.
+compareSpanRahn :: PCSet -> PCSet -> Ordering
+compareSpanRahn a b =
+  let intervals (x0 : xs) =
+        let rel = [ (x - x0) `mod` 12 | x <- xs ]
+         in reverse (take 1 (reverse rel)) ++ initSafe rel
+      intervals _ = mempty
+      initSafe (y : ys@(_ : _)) = y : initSafe ys
+      initSafe _                = mempty
+   in comparing intervals a b
+
+-- | Finds the Rahn Normal Order of a pitch-class set (packs small intervals toward the left/bottom).
+rahnNormalOrder :: PCSet -> PCSet
+rahnNormalOrder raw =
+  let s = makeSet raw
+   in if length s <= 1
+        then s
+        else minimumBy compareSpanRahn (rotations s)
+
+-- | Computes the Rahn Prime Form (zero-normalized form using Rahn Normal Order).
+rahnPrimeForm :: PCSet -> PCSet
+rahnPrimeForm raw =
+  let s = makeSet raw
+   in if length s <= 1
+        then zeroNormalize s
+        else
+          let normOrig = zeroNormalize (rahnNormalOrder s)
+              normInv  = zeroNormalize (rahnNormalOrder (invertSet 0 s))
+           in minimumBy compareSpanRahn [normOrig, normInv]
 
 -- | Computes the 6-element Interval-Class Vector <ic1, ic2, ic3, ic4, ic5, ic6>.
 intervalVector :: PCSet -> IntervalVector
