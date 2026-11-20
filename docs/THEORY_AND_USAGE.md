@@ -1,12 +1,12 @@
 # Theory & Workflow Guide
 
-This guide explains the set-theory concepts implemented in `PitchClassSet` and how to combine `set-tool` and `serial-compose` in a practical composition workflow.
+This guide explains the set-theory concepts implemented in `PitchClassSet` and `SerialComposer`, along with practical workflows combining `set-tool` and `serial-compose`.
 
 ---
 
 ## 1. Pitch-Class Set Theory Reference (`PitchClassSet`)
 
-### Pitch Classes & Transposition (`Tn` / `TnI`)
+### Pitch Classes, Transposition (`Tn`), and Inversion (`TnI`)
 - Pitch classes are represented modulo 12 (`0 = C`, `1 = C#/Db`, ..., `11 = B`).
 - **Transposition (`Tn`):** Shifts every pitch class up by `n` semitones: `(x + n) mod 12`.
 - **Inversion (`TnI`):** Reflects every pitch class around `0` and transposes by `n`: `(n - x) mod 12`.
@@ -30,33 +30,49 @@ Counts the total occurrences of all six interval classes (unordered pitch-class 
 - **`R2` (Strong Similarity):** Two sets share 4 identical Interval Vector entries, while the remaining 2 entries differ without swapping.
 - **`Rp` (Pitch-Class Similarity):** Two sets of cardinality `N` share at least one common abstract subset of cardinality `N - 1`.
 
+### Set-Complexes `K` and `Kh`
+For any reference set class `T` (cardinality 3–9) and its complement `T-bar`:
+- **Set-Complex `K(T, T-bar)`:** Contains every set class `S` (other than `T` and `T-bar`) that is in an abstract subset/superset relation with **`T` OR `T-bar`**.
+- **Subcomplex `Kh(T, T-bar)`:** Contains every set class `S` that is in an abstract subset/superset relation with **BOTH `T` AND `T-bar`**.
+- **Nexus Set:** A set class `T` that holds a `K` or `Kh` relation with every set in a target collection `{S1, S2, ...}` simultaneously.
+
+### Hexachordal Combinatoriality
+A 6-note hexachord `H` is **combinatorial** with a transformation `X(H)` if `H` and `X(H)` are disjoint (`H ∪ X(H) = {0..11}`), completing the 12-tone aggregate:
+- **P / R Combinatorial:** `Tn(H) = Complement(H)` for at least one `n ∈ 0..11`.
+- **I / RI Combinatorial:** `TnI(H) = Complement(H)` for at least one `n ∈ 0..11`.
+- **All-Combinatorial:** Satisfies both `P/R` and `I/RI` combinatoriality (the 6 all-combinatorial hexachords are `6-1`, `6-7`, `6-8`, `6-20`, `6-32`, and `6-35`).
+
 ---
 
 ## 2. Combined Composition Workflows
 
-### Workflow A: Building a Row Around a Target Trichord
-1. **Pick a core trichord** (e.g., `3-5` `(0,1,6)` — minor second + tritone).
-2. **Find larger supersets saturated with that trichord:**
+### Workflow A: Building a Derived 12-Tone Row from a Core Cell
+1. **Pick a core trichord or tetrachord** (e.g., `3-5` `(0,1,6)` — minor second + tritone).
+2. **Generate a 12-tone row where all 4 discrete trichords are `Tn`/`TnI` forms of `3-5`:**
    ```bash
-   cabal run set-tool -- supersets 3-5 6
+   cabal run serial-compose -- --derive 0,1,6 -r B --seed 42 --analyze --plain -f derived_3_5
    ```
-   Look for hexachords with high embedding counts (`[x3]` or `[x4]`), such as `6-7` `(0,1,2,6,7,8)` or `6-Z19` `(0,1,3,4,7,8)`.
-3. **Order the pitch classes into a row and inspect its segments:**
-   ```bash
-   cabal run serial-compose -- -w "0,1,6,7,8,2" -r D --analyze --plain -f hex_study
-   ```
-4. **Open `hex_study.musicxml` in MuseScore** to refine phrasing, voicings, and register.
+3. **Open `derived_3_5.musicxml` in MuseScore** to shape register, rhythm, and phrasing.
 
-### Workflow B: Smooth Voice-Leading via Common-Tone Invariance
-1. **Inspect `Tn` common tones** for your harmonic cell:
+### Workflow B: Unifying Multi-Section Harmony with Nexus Sets
+1. **Collect the main harmonic cells across your sections** (e.g., `3-5`, `4-Z15`, and `5-19`).
+2. **Find all `K` and `Kh` nexus sets connecting them:**
    ```bash
-   cabal run set-tool -- 0,1,6,7,10
+   cabal run set-tool -- nexus 3-5 4-Z15 5-19
    ```
-2. Look for high `Tn` counts (such as `T6:4`, where transposing by a tritone keeps 4 out of 5 pitches intact) to plan pivot modulations between sections.
+3. Use a strict `Kh` nexus hexachord (such as `6-Z19` or `6-Z44`) to bridge sections while preserving subset/superset coherence.
 
-### Workflow C: Exploring Z-Mates & Similarity Substitutions
-1. **Check whether a harmonic cell has a Z-partner or `R1`/`R2` neighbors:**
+### Workflow C: Voice-Leading & Combinatorial Aggregate Counterpoint
+1. **Check `Tn` and `TnI` common-tone invariance** for a harmonic cell:
    ```bash
-   cabal run set-tool -- 4-Z15
+   cabal run set-tool -- 0,1,6,7
    ```
-2. Substitute the Z-mate (`4-Z29`) in a contrasting section to keep the exact same overall dissonance profile (`<111111>`) while shifting the melodic contour and prime form.
+   Look at both `Tn` and `TnI` vectors (e.g., `T6:4` or `T1I:4`) to find transpositions or inversions that retain the most shared pitches.
+2. **Verify exact transformations between two specific voicings:**
+   ```bash
+   cabal run set-tool -- 0,1,6,7 2,3,8,9
+   ```
+3. **Test a hexachord for aggregate counterpoint** (e.g., Guitar playing `P0` while Bass plays an `I`-combinatorial inversion `TnI` to complete all 12 pitch classes):
+   ```bash
+   cabal run set-tool -- comb 6-7
+   ```
