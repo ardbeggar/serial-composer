@@ -75,6 +75,20 @@ main = do
           putStrLn $ "Error: Invalid cardinality '" ++ rawCard ++ "'."
           exitFailure
 
+    ["complex", rawSet] ->
+      case parseInput rawSet of
+        Nothing -> do
+          putStrLn $ "Error: Could not parse pitch-class set or Forte name '" ++ rawSet ++ "'."
+          exitFailure
+        Just pcs -> printKComplex pcs
+
+    ("nexus" : rawSets) | length rawSets >= 2 ->
+      case traverse parseInput rawSets of
+        Nothing -> do
+          putStrLn "Error: Could not parse one or more pitch-class sets."
+          exitFailure
+        Just pcSets -> printNexusSets pcSets
+
     [rawA, rawB] ->
       case (parseInput rawA, parseInput rawB) of
         (Just setA, Just setB) -> printComparison setA setB
@@ -88,6 +102,8 @@ main = do
       putStrLn $ "  " ++ prog ++ " <set-1> <set-2>                     Compare two sets (Z-relation & similarity)"
       putStrLn $ "  " ++ prog ++ " supersets <set> [cardinality]       Find catalog supersets containing <set>"
       putStrLn $ "  " ++ prog ++ " subsets <set> [cardinality]         Find catalog subsets contained in <set>"
+      putStrLn $ "  " ++ prog ++ " complex <set>                     Show Forte K / Kh set-complex around <set>"
+      putStrLn $ "  " ++ prog ++ " nexus <set1> <set2> [set3...]     Find nexus sets in K/Kh with all given sets"
       putStrLn "Examples:"
       putStrLn $ "  " ++ prog ++ " 4-Z15"
       putStrLn $ "  " ++ prog ++ " 4-Z15 4-Z29"
@@ -190,3 +206,38 @@ printComparison setA setB = do
   putStrLn $ "Same Set Class (Tn/TnI): " ++ if pfA == pfB then "Yes" else "No"
   putStrLn $ "Z-Related Pair:          " ++ if zRel then "Yes (identical interval vector, distinct prime forms)" else "No"
   putStrLn $ "Similarity Relations:    " ++ if null rels then "None" else intercalate ", " rels
+
+
+printKComplex :: PCSet -> IO ()
+printKComplex pcs = do
+  let pf   = primeForm pcs
+      pfC  = primeForm (complementSet pcs)
+      members = findKComplex pf
+      khCount = length [ () | (_, tag) <- members, tag == "Kh" ]
+  printf "=== Forte Set-Complex K / Kh for %s (%s) & Complement %s (%s) ===\n"
+    (forteName pf) (intercalate "," (map show pf))
+    (forteName pfC) (intercalate "," (map show pfC))
+  printf "Total K members: %d (including %d Kh members)\n\n" (length members) khCount
+  mapM_ (\(entry, tag) ->
+           printf "  [%-2s]  %-7s (%-17s) %s\n"
+             tag
+             (feName entry)
+             (intercalate "," (map show (fePrime entry)))
+             (formatVector (feVector entry)))
+        members
+
+printNexusSets :: [PCSet] -> IO ()
+printNexusSets pcSets = do
+  let labels = [ forteName s ++ " (" ++ intercalate "," (map show (primeForm s)) ++ ")" | s <- pcSets ]
+      nexus  = findNexusSets False pcSets
+      khOnly = [ (e, t) | (e, t) <- nexus, t == "Kh" ]
+  putStrLn "=== Forte Nexus Set Search ==="
+  putStrLn $ "Target Sets: " ++ intercalate ", " labels
+  printf "Found %d K-nexus set class(es) (%d strict Kh-nexus):\n\n" (length nexus) (length khOnly)
+  mapM_ (\(entry, tag) ->
+           printf "  [%-2s]  %-7s (%-17s) %s\n"
+             tag
+             (feName entry)
+             (intercalate "," (map show (fePrime entry)))
+             (formatVector (feVector entry)))
+        nexus

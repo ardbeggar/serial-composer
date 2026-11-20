@@ -35,6 +35,13 @@ module PitchClassSet
   , findSubsets
   , formatSet
   , formatVector
+
+  , isAbstractInclusion
+  , isKRelated
+  , isKhRelated
+  , findKComplex
+  , findNexusSets
+
   ) where
 
 import Data.List (find, intercalate, minimumBy, nub, sort, subsequences, tails)
@@ -356,6 +363,63 @@ findSubsets mCard raw =
       , let count = countEmbeddings (fePrime entry) pf
       , count > 0
       ]
+
+
+--------------------------------------------------------------------------------
+-- Set-Complexes K, Kh, and Nexus Set Discovery (Forte)
+--------------------------------------------------------------------------------
+
+-- | True if one set class is an abstract subset of the other (including equal prime forms).
+isAbstractInclusion :: PCSet -> PCSet -> Bool
+isAbstractInclusion rawA rawB =
+  let pfA = primeForm rawA
+      pfB = primeForm rawB
+   in pfA == pfB || countEmbeddings pfA pfB > 0 || countEmbeddings pfB pfA > 0
+
+-- | Forte Set-Complex K(T, T-bar):
+-- True if @rawS@ is in an abstract subset/superset relation with @rawT@ OR @complementSet rawT@.
+isKRelated :: PCSet -> PCSet -> Bool
+isKRelated rawS rawT =
+  let pfS  = primeForm rawS
+      pfT  = primeForm rawT
+      pfTc = primeForm (complementSet rawT)
+   in pfS /= pfT && pfS /= pfTc && (isAbstractInclusion pfS pfT || isAbstractInclusion pfS pfTc)
+
+-- | Forte Subcomplex Kh(T, T-bar):
+-- True if @rawS@ is in an abstract subset/superset relation with BOTH @rawT@ AND @complementSet rawT@.
+isKhRelated :: PCSet -> PCSet -> Bool
+isKhRelated rawS rawT =
+  let pfS  = primeForm rawS
+      pfT  = primeForm rawT
+      pfTc = primeForm (complementSet rawT)
+   in pfS /= pfT && pfS /= pfTc && isAbstractInclusion pfS pfT && isAbstractInclusion pfS pfTc
+
+-- | Lists all catalog set classes in Set-Complex K(T, T-bar), tagged with "Kh" or "K".
+findKComplex :: PCSet -> [(ForteEntry, String)]
+findKComplex rawT =
+  [ (entry, if isKhRelated (fePrime entry) rawT then "Kh" else "K")
+  | entry <- forteCatalog
+  , isKRelated (fePrime entry) rawT
+  ]
+
+-- | Given a collection of sets @[S1, S2, ...]@, finds all catalog set classes @T@
+-- that hold a K or Kh relation with EVERY set in the collection simultaneously.
+-- If @strictKh@ is True, requires Kh with every set; otherwise requires K with every set
+-- (and labels entries that achieve Kh across all sets as "Kh", else "K").
+findNexusSets :: Bool -> [PCSet] -> [(ForteEntry, String)]
+findNexusSets strictKh sets =
+  let pfs = nub (map primeForm sets)
+      relCheck = if strictKh then isKhRelated else isKRelated
+   in if null pfs
+        then mempty
+        else
+          [ (entry, label)
+          | entry <- forteCatalog
+          , let pfT = fePrime entry
+          , all (`relCheck` pfT) pfs
+          , let label = if all (`isKhRelated` pfT) pfs then "Kh" else "K"
+          ]
+
 
 --------------------------------------------------------------------------------
 -- Formatting Helpers
