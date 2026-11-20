@@ -89,6 +89,13 @@ main = do
           exitFailure
         Just pcSets -> printNexusSets pcSets
 
+    ["comb", rawSet] ->
+      case parseInput rawSet of
+        Nothing -> do
+          putStrLn $ "Error: Could not parse pitch-class set or Forte name '" ++ rawSet ++ "'."
+          exitFailure
+        Just pcs -> printCombinatoriality pcs
+
     [rawA, rawB] ->
       case (parseInput rawA, parseInput rawB) of
         (Just setA, Just setB) -> printComparison setA setB
@@ -104,6 +111,7 @@ main = do
       putStrLn $ "  " ++ prog ++ " subsets <set> [cardinality]         Find catalog subsets contained in <set>"
       putStrLn $ "  " ++ prog ++ " complex <set>                     Show Forte K / Kh set-complex around <set>"
       putStrLn $ "  " ++ prog ++ " nexus <set1> <set2> [set3...]     Find nexus sets in K/Kh with all given sets"
+      putStrLn $ "  " ++ prog ++ " comb <hexachord>                Analyze 6-note hexachord combinatoriality"
       putStrLn "Examples:"
       putStrLn $ "  " ++ prog ++ " 4-Z15"
       putStrLn $ "  " ++ prog ++ " 4-Z15 4-Z29"
@@ -241,3 +249,29 @@ printNexusSets pcSets = do
              (intercalate "," (map show (fePrime entry)))
              (formatVector (feVector entry)))
         nexus
+
+printCombinatoriality :: PCSet -> IO ()
+printCombinatoriality pcs =
+  case analyzeCombinatoriality pcs of
+    Nothing -> do
+      putStrLn $ "Error: Combinatoriality requires a hexachord (cardinality 6), got cardinality "
+              ++ show (length pcs) ++ "."
+      exitFailure
+    Just res -> do
+      let h    = crHexachord res
+          comp = crComplement res
+          pStr = if null (crPTransLevels res)
+                   then "None"
+                   else intercalate ", " [ "T" ++ show n | n <- crPTransLevels res ]
+          iStr = if null (crITransLevels res)
+                   then "None"
+                   else intercalate ", " [ "T" ++ show n ++ "I" | n <- crITransLevels res ]
+      printf "=== Hexachordal Combinatoriality Analysis ===\n"
+      printf "Hexachord H:      %s -> Forte %-7s (%s)  %s\n"
+        (formatSet h) (forteName h) (intercalate "," (map show (primeForm h))) (formatVector (intervalVector h))
+      printf "Complement H-bar: %s -> Forte %-7s (%s)  %s\n"
+        (formatSet comp) (forteName comp) (intercalate "," (map show (primeForm comp))) (formatVector (intervalVector comp))
+      putStrLn ""
+      putStrLn $ "Classification:   " ++ crClassification res
+      putStrLn $ "P / R Levels:     " ++ pStr
+      putStrLn $ "I / RI Levels:    " ++ iStr

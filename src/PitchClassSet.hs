@@ -42,6 +42,9 @@ module PitchClassSet
   , findKComplex
   , findNexusSets
 
+  , CombinatorialityResult(..)
+  , analyzeCombinatoriality
+
   ) where
 
 import Data.List (find, intercalate, minimumBy, nub, sort, subsequences, tails)
@@ -420,6 +423,42 @@ findNexusSets strictKh sets =
           , let label = if all (`isKhRelated` pfT) pfs then "Kh" else "K"
           ]
 
+
+  --------------------------------------------------------------------------------
+-- Hexachordal Combinatoriality Analyzer
+--------------------------------------------------------------------------------
+
+data CombinatorialityResult = CombinatorialityResult
+  { crHexachord      :: PCSet
+  , crComplement     :: PCSet
+  , crPTransLevels   :: [Int]  -- ^ Levels n where Tn(H) == Complement(H) (P- & R-combinatorial)
+  , crITransLevels   :: [Int]  -- ^ Levels n where TnI(H) == Complement(H) (I- & RI-combinatorial)
+  , crClassification :: String -- ^ "All-Combinatorial", "P/R-Combinatorial", "I/RI-Combinatorial", or "Non-Combinatorial"
+  } deriving (Show, Eq)
+
+-- | Analyzes a 6-note hexachord for P/R and I/RI aggregate combinatoriality.
+-- Returns @Nothing@ if the input set does not have cardinality 6.
+analyzeCombinatoriality :: PCSet -> Maybe CombinatorialityResult
+analyzeCombinatoriality raw =
+  let h = makeSet raw
+   in if length h /= 6
+        then Nothing
+        else
+          let comp = complementSet h
+              pLevels = [ n | n <- enumFromTo 0 11, transposeSet n h == comp ]
+              iLevels = [ n | n <- enumFromTo 0 11, invertSet n h == comp ]
+              cls = case (null pLevels, null iLevels) of
+                      (False, False) -> "All-Combinatorial (P, R, I, and RI)"
+                      (False, True)  -> "Semi-Combinatorial: P- and R-Combinatorial"
+                      (True, False)  -> "Semi-Combinatorial: I- and RI-Combinatorial"
+                      (True, True)   -> "Non-Combinatorial (requires Z-mate hexachord for aggregate)"
+           in Just CombinatorialityResult
+                { crHexachord      = h
+                , crComplement     = comp
+                , crPTransLevels   = pLevels
+                , crITransLevels   = iLevels
+                , crClassification = cls
+                }
 
 --------------------------------------------------------------------------------
 -- Formatting Helpers
