@@ -18,6 +18,7 @@ data Options = Options
   , optRoot      :: String
   , optOctave    :: Maybe Int
   , optMode      :: String -- "guitar", "bass", or "duo"
+  , optAnalyze   :: Bool
   , optPlain     :: Bool
   , optBpm       :: Int
   , optOut       :: String
@@ -33,6 +34,7 @@ defaultOptions = Options
   , optRoot      = "C"
   , optOctave    = Nothing
   , optMode      = "duo"
+  , optAnalyze   = False
   , optPlain     = False
   , optBpm       = 75
   , optOut       = "serial_output"
@@ -62,6 +64,9 @@ options =
   , Option ['p'] ["part"]
       (ReqArg (\v opts -> opts { optMode = v }) "MODE")
       "Instrument mode: guitar, bass, or duo (default: duo)"
+  , Option ['a'] ["analyze"]
+      (NoArg (\opts -> opts { optAnalyze = True }))
+      "Print Forte pitch-class set segmentation of P0 (requires --mod 12)"
   , Option [] ["plain"]
       (NoArg (\opts -> opts { optPlain = True }))
       "Use plain quarter notes without rhythm/octave displacement"
@@ -196,6 +201,12 @@ main = do
   printMatrix mat
   putStrLn "\n--- Transposed Note Matrix ---"
   printNoteMatrix rootPc mat
+
+  if optAnalyze opts
+    then if optMod opts == 12
+           then printRowSegmentation rootPc row
+           else putStrLn "\nNote: --analyze requires --mod 12 (standard chromatic pitch-class space)."
+    else return ()
 
   let parts = buildParts opts rootPc mat genAfterRow
       xmlFile = optOut opts ++ ".musicxml"

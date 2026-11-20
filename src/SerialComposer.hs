@@ -5,6 +5,11 @@ module SerialComposer
   , Matrix
   , NoteEvent(..)
   , PartSpec(..)
+  , SegmentInfo(..)
+  , partitionRow
+  , slidingSegments
+  , analyzeSegments
+  , printRowSegmentation
   , randomRow
   , generateMatrix
   , getPrime
@@ -22,10 +27,11 @@ module SerialComposer
   ) where
 
 import Prelude hiding (span)
-import Data.List (sortBy)
+import Data.List (sortBy, intercalate)
 import Data.Ord (comparing)
 import System.Random (StdGen, randomR, randoms, split)
 import Text.Printf (printf)
+import qualified PitchClassSet as PCS
 
 type PitchClass = Int
 type MidiPitch = Int
@@ -314,3 +320,84 @@ exportMusicXMLParts path parts = writeFile path content
         , concatMap formatPartBody (zip partIds parts)
         , "</score-partwise>"
         ]
+
+--------------------------------------------------------------------------------
+-- Pitch-Class Set Segmentation Analysis (Mod 12)
+--------------------------------------------------------------------------------
+
+data SegmentInfo = SegmentInfo
+  { siPitches   :: [PitchClass]
+  , siForteName :: String
+  , siPrimeForm :: PCS.PCSet
+  , siVector    :: PCS.IntervalVector
+  } deriving (Show, Eq)
+
+-- | Splits a row into contiguous non-overlapping chunks of size @k@
+-- (dropping any trailing remainder shorter than @k@).
+partitionRow :: Int -> [PitchClass] -> [[PitchClass]]
+partitionRow k xs
+  | k <= 0        = mempty
+  | length xs < k = mempty
+  | otherwise     = take k xs : partitionRow k (drop k xs)
+
+-- | Generates all contiguous overlapping windows of size @k@ across a row.
+slidingSegments :: Int -> [PitchClass] -> [[PitchClass]]
+slidingSegments k xs
+  | k <= 0 || length xs < k = mempty
+  | otherwise               = take k xs : slidingSegments k (drop 1 xs)
+
+-- | Analyzes a list of pitch-class segments using Forte set theory.
+analyzeSegments :: [[PitchClass]] -> [SegmentInfo]
+analyzeSegments = map toInfo
+  where
+    toInfo seg =
+      let pf = PCS.primeForm seg
+       in SegmentInfo
+            { siPitches   = seg
+            , siForteName = PCS.forteName seg
+            , siPrimeForm = pf
+            , siVector    = PCS.intervalVector pf
+            }
+
+-- | Prints discrete and overlapping segment analyses for a row (when modulus == 12).
+printRowSegmentation :: Int -> [PitchClass] -> IO ()
+printRowSegmentation rootOffset row = do
+  let n = length row
+      transposed = map (\p -> (p + rootOffset) `mod` 12) row
+      noteLabels = map pcToNoteName transposed
+  putStrLn $ "\n=== Row Set-Class Segmentation (Root: " ++ pcToNoteName rootOffset ++ ") ==="
+  putStrLn $ "P0 Pitches: " ++ unwords noteLabels
+          ++ "  (" ++ intercalate "," (map show transposed) ++ ")"
+  putStrLn $ "Whole Row:  Forte " ++ PCS.forteName row
+          ++ " (" ++ intercalate "," (map show (PCS.primeForm row)) ++ ") "
+          ++ PCS.formatVector (PCS.intervalVector row)
+
+  -- Print discrete partitions for all divisors of N where 3 <= k < N (e.g., 3, 4, 6 for N=12)
+  let divisors = [ k | k <- enumFromTo 3 (n - 1), n `mod` k == 0 ]
+  mapM_ (\k -> do
+           let segs = analyzeSegments (partitionRow k row)
+           putStrLn $ "\n--- Discrete Partition (" ++ show (length segs) ++ " x " ++ show k ++ "-note segments) ---"
+           mapM_ (printSegLine rootOffset) (zip (enumFromTo 1 (length segs)) segs))
+        divisors
+
+  -- Print sliding trichords (and tetrachords if N >= 5)
+  let windowSizes = filter (< n) [3, 4]
+  mapM_ (\k -> do
+           let segs = analyzeSegments (slidingSegments k row)
+           putStrLn $ "\n--- Sliding " ++ show k ++ "-Note Windows ---"
+           mapM_ (printSegLine rootOffset) (zip (enumFromTo 1 (length segs)) segs))
+        windowSizes
+
+printSegLine :: Int -> (Int, SegmentInfo) -> IO ()
+printSegLine rootOffset (idx, info) = do
+  let notes = unwords [ pcToNoteName ((p + rootOffset) `mod` 12) | p <- siPitches info ]
+      pcs   = "[" ++ intercalate "," (map show (siPitches info)) ++ "]"
+      pf    = "(" ++ intercalate "," (map show (siPrimeForm info)) ++ ")"
+      iv    = PCS.formatVector (siVector info)
+  putStrLn $ "  #" ++ show idx ++ ": " ++ padRight 14 notes
+          ++ " " ++ padRight 13 pcs
+          ++ " -> Forte " ++ padRight 7 (siForteName info)
+          ++ " " ++ padRight 11 pf
+          ++ " " ++ iv
+  where
+    padRight len str = str ++ replicate (max 0 (len - length str)) ' '
