@@ -1,6 +1,6 @@
 # SerialComposer
 
-`SerialComposer` is a pure Haskell library suite and set of command-line tools (`serial-compose` and `set-tool`) for **N × N serial matrix generation**, **derived and all-interval row construction**, **Stravinsky rotational arrays**, **Allen Forte pitch-class set theory analysis**, and **MusicXML / LilyPond score export**.
+`SerialComposer` is a pure Haskell library suite and set of command-line tools (`serial-compose` and `set-tool`) for **N × N serial matrix generation**, **derived and all-interval row construction**, **Stravinsky rotational arrays**, **Allen Forte & John Rahn pitch-class set theory analysis**, **interval cycles**, and **MusicXML / LilyPond score export**.
 
 See [docs/THEORY_AND_USAGE.md](docs/THEORY_AND_USAGE.md) for mathematical definitions and combined composition workflows.
 
@@ -19,7 +19,7 @@ serial-composer/
 │   └── SetTool.hs        (set-tool CLI)
 └── src/
     ├── SerialComposer.hs (N x N matrix, invariance, rotational arrays, M5/M7, score export)
-    └── PitchClassSet.hs  (Forte catalog, K/Kh complexes, combinatoriality, voice-leading, Tn/TnI)
+    └── PitchClassSet.hs  (Forte/Rahn prime forms, catalog, K/Kh, combinatoriality, cycles)
 ```
 
 ---
@@ -105,13 +105,13 @@ cabal run serial-compose -- -w "0,1,6,7,10" -r D --m5 --rotate --analyze
 
 ## 3. Pitch-Class Set Theory Tool (`set-tool`)
 
-`set-tool` implements Allen Forte's *The Structure of Atonal Music*, including the complete 208-class Forte catalog (`3-1` through `9-12`), Normal Order, Prime Form, Interval-Class Vectors, Z-relations, similarity relations (`R1`, `R2`, `Rp`), `M5`/`M7` transforms, abstract superset/subset searches, `K`/`Kh` set-complexes, nexus set discovery, hexachordal combinatoriality, exact `Tn`/`TnI` mapping solvers, and minimal voice-leading distance.
+`set-tool` implements Allen Forte's *The Structure of Atonal Music*, John Rahn's prime form algorithm, and George Perle's interval cycles—including the complete 208-class Forte catalog (`3-1` through `9-12`), Normal Order & Prime Form (showing both Forte and Rahn whenever they diverge), Interval-Class Vectors, Z-relations, similarity relations (`R1`, `R2`, `Rp`), `M5`/`M7` transforms, abstract superset/subset searches, `K`/`Kh` set-complexes, nexus set discovery, hexachordal combinatoriality, exact `Tn`/`TnI` mapping solvers, minimal voice-leading distance, and interval cycles.
 
 ### Commands
 
 | Command | Description |
 | :--- | :--- |
-| `set-tool <set-or-forte-name>` | Full analysis: Normal Order, Prime Form, Interval Vector, Complement, Z-Mate, `M5`/`M7` transforms, `Tn` & `TnI` common tones, internal symmetry, `R1`/`R2`/`Rp` similar sets, and embedded trichords |
+| `set-tool <set-or-forte-name>` | Full analysis: Normal Order & Prime Form (Forte & Rahn), Interval Vector, Complement, Z-Mate, `M5`/`M7` transforms, `Tn` & `TnI` common tones, internal symmetry, `R1`/`R2`/`Rp` similar sets, and embedded trichords |
 | `set-tool <set-1> <set-2>` | Compare two sets: `Tn`/`TnI` equivalence, exact `Tn`/`TnI` mapping (`A -> B`), Z-relation, and `R1`/`R2`/`Rp` similarity |
 | `set-tool voicelead <src> <target>` | Find the most parsimonious `Tn`/`TnI` voice-leadings from `<src>` to `<target>` with minimum total semitone displacement |
 | `set-tool supersets <set> [card]` | Find all Forte catalog supersets containing `<set>` (optionally filtered to cardinality `card`), with embedding multiplicity `[xN]` |
@@ -119,15 +119,17 @@ cabal run serial-compose -- -w "0,1,6,7,10" -r D --m5 --rotate --analyze
 | `set-tool complex <set>` | List all members of Forte Set-Complex `K` and Subcomplex `Kh` around `<set>` and its complement |
 | `set-tool nexus <set1> <set2>` | Find every catalog nexus set class holding a `K` or `Kh` relation with all given sets simultaneously |
 | `set-tool comb <hexachord>` | Analyze a 6-note hexachord for `P`/`R` and `I`/`RI` aggregate combinatoriality |
+| `set-tool cycle <k \| k1,k2> [start]` | Generate a basic `Ck` cycle (with all 12-tone cosets) or an alternating `Alt(k1,k2)` cycle |
+| `set-tool cycle-fit <set>` | Find all basic and alternating interval cycles containing `<set>` (marking `[CONTIGUOUS]` vs `[SUBSET]`) |
 
 ### Examples
 
-**Analyze a set by pitch-class integers, note names, or Forte catalog name:**
+**Analyze a set (including Forte vs. Rahn prime form comparison on diverging sets like `5-20`):**
 
 ```bash
 cabal run set-tool -- 0,1,4,6
+cabal run set-tool -- 5-20
 cabal run set-tool -- C,Db,Gb,G,Bb
-cabal run set-tool -- 4-Z15
 ```
 
 **Find minimal voice-leading distance from `4-9` (`0,1,6,7`) to any `Tn`/`TnI` form of `4-Z15`:**
@@ -164,6 +166,14 @@ cabal run set-tool -- comb 6-7
 cabal run set-tool -- comb 0,1,3,4,6,7
 ```
 
+**Generate basic/alternating interval cycles and test cycle alignment:**
+
+```bash
+cabal run set-tool -- cycle 3 B
+cabal run set-tool -- cycle 1,3 0
+cabal run set-tool -- cycle-fit 0,1,6,7
+```
+
 ---
 
 ## 4. Tuning Reference (`rootOffset` & `baseOctave`)
@@ -193,16 +203,17 @@ import SerialComposer
 import PitchClassSet
 import System.Random (mkStdGen)
 
--- Analyze a set and compute minimal voice-leading
-let s = makeSet [0,1,6,7]
-minimalVoiceLeading s [0,1,4,6]
-m5Set s
+-- Compare Forte vs. Rahn prime forms and inspect interval cycles
+let s = makeSet [0, 1, 5, 6, 8]
+primeForm s                 -- [0,1,3,7,8] (Forte 5-20)
+rahnPrimeForm s             -- [0,1,5,6,8] (Rahn)
+alternatingCycle (1, 3) 0   -- [0,1,4,5,8,9] (Hexatonic 6-20)
 
 -- Generate a derived 12-tone row, scan 4N invariance, and print its rotational array
-let (Just dRow, _) = deriveRow12 [0,1,6] (mkStdGen 42)
+let (Just dRow, _) = deriveRow12 [0, 1, 6] (mkStdGen 42)
 printRowSegmentation 11 dRow
 printRowInvariance 12 11 dRow
-printRotationalArray 12 11 [0,1,6,7,10]
+printRotationalArray 12 11 [0, 1, 6, 7, 10]
 ```
 
 ---
