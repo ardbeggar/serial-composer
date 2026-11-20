@@ -96,6 +96,13 @@ main = do
           exitFailure
         Just pcs -> printCombinatoriality pcs
 
+    ["voicelead", rawSrc, rawTgt] ->
+      case (parseInput rawSrc, parseInput rawTgt) of
+        (Just src, Just tgt) -> printVoiceLeading src tgt
+        _ -> do
+          putStrLn "Error: Could not parse source or target pitch-class set."
+          exitFailure
+
     [rawA, rawB] ->
       case (parseInput rawA, parseInput rawB) of
         (Just setA, Just setB) -> printComparison setA setB
@@ -112,6 +119,7 @@ main = do
       putStrLn $ "  " ++ prog ++ " complex <set>                     Show Forte K / Kh set-complex around <set>"
       putStrLn $ "  " ++ prog ++ " nexus <set1> <set2> [set3...]     Find nexus sets in K/Kh with all given sets"
       putStrLn $ "  " ++ prog ++ " comb <hexachord>                Analyze 6-note hexachord combinatoriality"
+      putStrLn $ "  " ++ prog ++ " voicelead <src> <target-class>    Find most parsimonious Tn/TnI voice-leadings"
       putStrLn "Examples:"
       putStrLn $ "  " ++ prog ++ " 4-Z15"
       putStrLn $ "  " ++ prog ++ " 4-Z15 4-Z29"
@@ -285,3 +293,29 @@ printCombinatoriality pcs =
       putStrLn $ "Classification:   " ++ crClassification res
       putStrLn $ "P / R Levels:     " ++ pStr
       putStrLn $ "I / RI Levels:    " ++ iStr
+
+printVoiceLeading :: PCSet -> PCSet -> IO ()
+printVoiceLeading src tgt =
+  case minimalVoiceLeading src tgt of
+    Nothing -> do
+      putStrLn $ "Error: Minimal voice-leading requires two non-empty sets of equal cardinality (got "
+              ++ show (length src) ++ " and " ++ show (length tgt) ++ ")."
+      exitFailure
+    Just moves -> do
+      let topMoves = take 6 moves
+      printf "=== Minimal Voice-Leading Map: %s (%s) -> Target Class %s (%s) ===\n\n"
+        (formatSet src) (forteName src)
+        (forteName tgt) (intercalate "," (map show (primeForm tgt)))
+      mapM_ (\m -> do
+               let moveStrs = [ show a ++ "->" ++ show b ++ "(" ++ fmtDelta d ++ ")"
+                              | (a, b, d) <- vlPairing m ]
+               printf "  [Dist: %2d]  %-14s -> %-14s  |  %s\n"
+                 (vlDistance m)
+                 (vlOpLabel m)
+                 (formatSet (vlTarget m))
+                 (unwords moveStrs))
+            topMoves
+  where
+    fmtDelta d
+      | d > 0     = "+" ++ show d
+      | otherwise = show d

@@ -48,9 +48,11 @@ module PitchClassSet
   , inversionCommonTones
   , solveTransformations
 
+  , VoiceLeadingMove(..)
+  , minimalVoiceLeading
   ) where
 
-import Data.List (find, intercalate, minimumBy, nub, sort, subsequences, tails)
+import Data.List (find, intercalate, minimumBy, nub, permutations, sort, subsequences, tails)
 import Data.Maybe (fromMaybe)
 import Data.Ord (comparing)
 
@@ -166,6 +168,78 @@ solveTransformations rawA rawB =
       tLevels = [ n | n <- enumFromTo 0 11, transposeSet n a == b ]
       iLevels = [ n | n <- enumFromTo 0 11, invertSet n a == b ]
    in (tLevels, iLevels)
+
+
+--------------------------------------------------------------------------------
+-- Minimal Voice-Leading Distance & Parsimonious Tn / TnI Map
+--------------------------------------------------------------------------------
+
+data VoiceLeadingMove = VoiceLeadingMove
+  { vlOpLabel  :: String          -- ^ e.g. "T0", "T6", "T1I"
+  , vlTarget   :: PCSet           -- ^ Resulting concrete pitch-class set
+  , vlDistance :: Int             -- ^ Total semitone displacement (L1 taxicab distance)
+  , vlPairing  :: [(Int, Int, Int)] -- ^ (source PC, target PC, signed shortest semitone delta)
+  } deriving (Show, Eq)
+
+-- | Shortest signed semitone motion from pitch class @a@ to @b@ in [-6 .. 6].
+signedDelta :: PitchClass -> PitchClass -> Int
+signedDelta a b =
+  let d = (b - a) `mod` 12
+   in if d > 6 then d - 12 else d
+
+-- | Finds the optimal bijection between two sets of equal cardinality minimizing total semitone motion.
+bestBijection :: PCSet -> PCSet -> (Int, [(Int, Int, Int)])
+bestBijection src dst =
+  let perms = permutations dst
+      scored =
+        [ (totalDist, pairing)
+        | p <- perms
+        , let pairing = [ (a, b, signedDelta a b) | (a, b) <- zip src p ]
+        , let totalDist = sum [ abs d | (_, _, d) <- pairing ]
+        ]
+   in minimumBy (comparing fst) scored
+
+-- | Evaluates all Tn and TnI forms of @rawTargetClass@ against concrete set @rawSource@
+-- (must have equal cardinality), sorted by ascending total semitone voice-leading distance.
+minimalVoiceLeading :: PCSet -> PCSet -> Maybe [VoiceLeadingMove]
+minimalVoiceLeading rawSource rawTargetClass =
+  let src = makeSet rawSource
+      tgtBase = makeSet rawTargetClass
+   in if length src /= length tgtBase || null src
+        then Nothing
+        else
+          let candidates =
+                nubByTarget
+                  ( [ ("T" ++ show n, transposeSet n tgtBase) | n <- enumFromTo 0 11 ]
+                 ++ [ ("T" ++ show n ++ "I", invertSet n tgtBase) | n <- enumFromTo 0 11 ]
+                  )
+              moves =
+                [ VoiceLeadingMove
+                    { vlOpLabel  = lbl
+                    , vlTarget   = tgt
+                    , vlDistance = dist
+                    , vlPairing  = pairing
+                    }
+                | (lbl, tgt) <- candidates
+                , let (dist, pairing) = bestBijection src tgt
+                ]
+           in Just (sortByDist moves)
+  where
+    -- Group identical target sets together (combining labels like "T0 / T6" for symmetric sets)
+    nubByTarget =
+      foldr (\(lbl, tgt) acc ->
+               case break (\(_, t) -> t == tgt) acc of
+                 (_, []) -> (lbl, tgt) : acc
+                 (before, (oldLbl, t) : after) ->
+                   before ++ ((lbl ++ " / " ++ oldLbl, t) : after))
+            mempty
+
+    sortByDist =
+      foldr insertMove mempty
+    insertMove x [] = [x]
+    insertMove x (y : ys)
+      | vlDistance x <= vlDistance y = x : y : ys
+      | otherwise                    = y : insertMove x ys
 
 --------------------------------------------------------------------------------
 -- Complete Allen Forte Set-Class Catalog (3-1 through 9-12)
