@@ -103,6 +103,23 @@ main = do
           putStrLn "Error: Could not parse source or target pitch-class set."
           exitFailure
 
+    ["cycle", rawSpec] ->
+      printCycleSpec rawSpec 0
+
+    ["cycle", rawSpec, rawStart] ->
+      case parseToken rawStart of
+        Just st -> printCycleSpec rawSpec st
+        Nothing -> do
+          putStrLn $ "Error: Could not parse starting pitch '" ++ rawStart ++ "'."
+          exitFailure
+
+    ["cycle-fit", rawSet] ->
+      case parseInput rawSet of
+        Nothing -> do
+          putStrLn $ "Error: Could not parse pitch-class set or Forte name '" ++ rawSet ++ "'."
+          exitFailure
+        Just pcs -> printCycleFits pcs
+
     [rawA, rawB] ->
       case (parseInput rawA, parseInput rawB) of
         (Just setA, Just setB) -> printComparison setA setB
@@ -120,6 +137,8 @@ main = do
       putStrLn $ "  " ++ prog ++ " nexus <set1> <set2> [set3...]     Find nexus sets in K/Kh with all given sets"
       putStrLn $ "  " ++ prog ++ " comb <hexachord>                Analyze 6-note hexachord combinatoriality"
       putStrLn $ "  " ++ prog ++ " voicelead <src> <target-class>    Find most parsimonious Tn/TnI voice-leadings"
+      putStrLn $ "  " ++ prog ++ " cycle <k | k1,k2> [start]       Generate basic Ck or alternating Alt(k1,k2) cycle"
+      putStrLn $ "  " ++ prog ++ " cycle-fit <set>                 Find interval cycles containing <set>"
       putStrLn "Examples:"
       putStrLn $ "  " ++ prog ++ " 4-Z15"
       putStrLn $ "  " ++ prog ++ " 4-Z15 4-Z29"
@@ -336,3 +355,65 @@ printVoiceLeading src tgt =
     fmtDelta d
       | d > 0     = "+" ++ show d
       | otherwise = show d
+
+
+printCycleSpec :: String -> PitchClass -> IO ()
+printCycleSpec rawSpec startPc =
+  case splitCommas (trim rawSpec) of
+    [single] ->
+      case readMaybe (trim single) of
+        Just k | k >= 1 && k <= 11 -> do
+          let cosets = cycleCosets k startPc
+              primary = case cosets of
+                          (c : _) -> c
+                          []      -> []
+          printf "=== Interval Cycle C%d (Start: %d) ===\n" k (startPc `mod` 12)
+          printf "Primary Orbit:  %s -> Forte %-10s (%s)  %s\n"
+            (formatSet primary)
+            (forteName primary)
+            (intercalate "," (map show (primeForm primary)))
+            (formatVector (intervalVector primary))
+          printf "Total Cosets:   %d (partitioning all 12 pitch classes)\n\n" (length cosets)
+          mapM_ (\(idx, orb) ->
+                   printf "  Coset %d: %s\n" idx (formatSet orb))
+                (zip (enumFromTo 1 (length cosets)) cosets)
+        _ -> do
+          putStrLn "Error: Interval step must be an integer between 1 and 11 (or a pair like 1,3)."
+          exitFailure
+
+    [s1, s2] ->
+      case (readMaybe (trim s1), readMaybe (trim s2)) of
+        (Just k1, Just k2) | k1 >= 1 && k1 <= 11 && k2 >= 1 && k2 <= 11 -> do
+          let orb = alternatingCycle (k1, k2) startPc
+              uniq = makeSet orb
+          printf "=== Alternating Interval Cycle Alt(%d,%d) (Start: %d) ===\n" k1 k2 (startPc `mod` 12)
+          printf "Ordered Cycle:  %s (Length: %d)\n" (formatSet orb) (length orb)
+          printf "Unique PC-Set:  %s -> Forte %-10s (%s)  %s\n"
+            (formatSet uniq)
+            (forteName uniq)
+            (intercalate "," (map show (primeForm uniq)))
+            (formatVector (intervalVector uniq))
+        _ -> do
+          putStrLn "Error: Alternating interval steps must be integers between 1 and 11 (e.g. 1,3)."
+          exitFailure
+
+    _ -> do
+      putStrLn "Error: Expected a single interval (e.g. 3) or pair of intervals (e.g. 1,3)."
+      exitFailure
+
+printCycleFits :: PCSet -> IO ()
+printCycleFits pcs = do
+  let fits = findCycleFits pcs
+  printf "=== Interval-Cycle Alignment for %s (%s) ===\n"
+    (formatSet pcs) (forteName pcs)
+  if null fits
+    then putStrLn "No non-trivial symmetric interval cycles contain this set."
+    else do
+      printf "Found %d matching cyclic collection(s):\n\n" (length fits)
+      mapM_ (\cf ->
+               printf "  %-22s -> %-18s  Forte %-8s  %s\n"
+                 (cfLabel cf)
+                 (formatSet (cfOrbit cf))
+                 (cfForteName cf)
+                 (if cfIsContig cf then "[CONTIGUOUS]" else "[SUBSET]"))
+            fits

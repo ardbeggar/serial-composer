@@ -57,6 +57,12 @@ module PitchClassSet
 
   , rahnNormalOrder
   , rahnPrimeForm
+
+  , CycleFit(..)
+  , intervalCycle
+  , cycleCosets
+  , alternatingCycle
+  , findCycleFits
   ) where
 
 import Data.List (find, intercalate, minimumBy, nub, permutations, sort, subsequences, tails)
@@ -292,6 +298,120 @@ minimalVoiceLeading rawSource rawTargetClass =
     insertMove x (y : ys)
       | vlDistance x <= vlDistance y = x : y : ys
       | otherwise                    = y : insertMove x ys
+
+
+--------------------------------------------------------------------------------
+-- Interval Cycles & Alternating Cyclic Sets (George Perle)
+--------------------------------------------------------------------------------
+
+data CycleFit = CycleFit
+  { cfLabel     :: String   -- ^ e.g. "C3 (start 0)", "Alt(1,6) (start 0)"
+  , cfOrbit     :: [PitchClass]
+  , cfForteName :: String
+  , cfIsContig  :: Bool     -- ^ True if set appears as a contiguous cyclic slice of the orbit
+  } deriving (Show, Eq)
+
+-- | Generates a closed interval-k cycle starting at @start@ modulo 12.
+-- For example, @intervalCycle 3 0@ -> @[0,3,6,9]@.
+intervalCycle :: Int -> PitchClass -> [PitchClass]
+intervalCycle rawStep rawStart =
+  let step  = rawStep `mod` 12
+      start = rawStart `mod` 12
+   in if step == 0
+        then [start]
+        else
+          let go curr visited
+                | curr `elem` visited = reverse visited
+                | otherwise           = go ((curr + step) `mod` 12) (curr : visited)
+           in go start mempty
+
+-- | Partitions all 12 pitch classes into disjoint coset orbits of interval @k@,
+-- ordered starting from @anchor@.
+cycleCosets :: Int -> PitchClass -> [[PitchClass]]
+cycleCosets rawStep rawAnchor =
+  let anchor = rawAnchor `mod` 12
+      order  = [ (anchor + i) `mod` 12 | i <- enumFromTo 0 11 ]
+      build [] _ = []
+      build (p : ps) seen
+        | p `elem` seen = build ps seen
+        | otherwise     =
+            let orb = intervalCycle rawStep p
+             in orb : build ps (orb ++ seen)
+   in build order []
+
+-- | Generates a closed alternating two-interval cycle @(k1, k2)@ starting at @start@ modulo 12.
+-- Steps by +k1, +k2, +k1, +k2... until returning to @start@ at an even step boundary.
+alternatingCycle :: (Int, Int) -> PitchClass -> [PitchClass]
+alternatingCycle (rawK1, rawK2) rawStart =
+  let k1    = rawK1 `mod` 12
+      k2    = rawK2 `mod` 12
+      start = rawStart `mod` 12
+      go curr useFirst acc
+        | not (null acc) && curr == start && useFirst = reverse acc
+        | length acc >= 24                            = reverse acc
+        | otherwise =
+            let step = if useFirst then k1 else k2
+                next = (curr + step) `mod` 12
+             in go next (not useFirst) (curr : acc)
+   in go start True mempty
+
+-- | Checks whether @targetSet@ is a contiguous cyclic segment of @orbit@.
+isContiguousInOrbit :: PCSet -> [PitchClass] -> Bool
+isContiguousInOrbit target orbit =
+  let k = length target
+      n = length orbit
+   in if k == 0 || k > n
+        then False
+        else
+          let doubled = orbit ++ take (k - 1) orbit
+              windows = [ makeSet (take k (drop i doubled)) | i <- enumFromTo 0 (n - 1) ]
+           in target `elem` windows
+
+-- | Finds all basic interval cycles (C1..C6) and alternating cycles Alt(k1,k2)
+-- that contain @rawSet@ as a subset (excluding the trivial 12-note C1/C5 aggregates
+-- unless the input itself has cardinality >= 10), highlighting contiguous slices.
+findCycleFits :: PCSet -> [CycleFit]
+findCycleFits raw =
+  let s = makeSet raw
+      card = length s
+      basicCands =
+        [ CycleFit
+            { cfLabel     = "C" ++ show k ++ " (start " ++ show st ++ ")"
+            , cfOrbit     = orb
+            , cfForteName = forteName orb
+            , cfIsContig  = isContiguousInOrbit s orb
+            }
+        | k <- enumFromTo 1 6
+        , st <- enumFromTo 0 11
+        , let orb = intervalCycle k st
+        , let orbSet = makeSet orb
+        , length orbSet < 12 || card >= 10
+        , all (`elem` orbSet) s
+        ]
+      altPairs = [ (k1, k2) | k1 <- enumFromTo 1 6, k2 <- enumFromTo 1 6, k1 < k2 ]
+      altCands =
+        [ CycleFit
+            { cfLabel     = "Alt(" ++ show k1 ++ "," ++ show k2 ++ ") (start " ++ show st ++ ")"
+            , cfOrbit     = orb
+            , cfForteName = forteName orb
+            , cfIsContig  = isContiguousInOrbit s orb
+            }
+        | (k1, k2) <- altPairs
+        , st <- enumFromTo 0 11
+        , let orb = alternatingCycle (k1, k2) st
+        , let orbSet = makeSet orb
+        , length orbSet < 12 || card >= 10
+        , all (`elem` orbSet) s
+        ]
+      dedup =
+        foldr (\cf acc ->
+                 if any (\x -> makeSet (cfOrbit x) == makeSet (cfOrbit cf)
+                            && take 4 (cfLabel x) == take 4 (cfLabel cf)) acc
+                   then acc
+                   else cf : acc)
+              mempty
+   in dedup (basicCands ++ altCands)
+
 
 --------------------------------------------------------------------------------
 -- Complete Allen Forte Set-Class Catalog (3-1 through 9-12)
