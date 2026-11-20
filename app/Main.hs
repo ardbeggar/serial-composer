@@ -22,6 +22,7 @@ data Options = Options
   , optOctave      :: Maybe Int
   , optMode        :: String -- "guitar", "bass", or "duo"
   , optAnalyze     :: Bool
+  , optInvariance  :: Bool
   , optPlain       :: Bool
   , optBpm         :: Int
   , optOut         :: String
@@ -40,6 +41,7 @@ defaultOptions = Options
   , optOctave      = Nothing
   , optMode        = "duo"
   , optAnalyze     = False
+  , optInvariance  = False
   , optPlain       = False
   , optBpm         = 75
   , optOut         = "serial_output"
@@ -78,6 +80,9 @@ options =
   , Option ['a'] ["analyze"]
       (NoArg (\opts -> opts { optAnalyze = True }))
       "Print Forte pitch-class set segmentation of P0 (requires --mod 12)"
+  , Option ['v'] ["invariance"]
+      (NoArg (\opts -> opts { optInvariance = True }))
+      "Scan all 4N matrix forms for segment, pitch-set, and positional invariance"
   , Option [] ["plain"]
       (NoArg (\opts -> opts { optPlain = True }))
       "Use plain quarter notes without rhythm/octave displacement"
@@ -242,6 +247,10 @@ main = do
     then if optMod opts == 12
            then printRowSegmentation rootPc row
            else putStrLn "\nNote: --analyze requires --mod 12 (standard chromatic pitch-class space)."
+    else return ()
+
+  if optInvariance opts
+    then printRowInvariance m rootPc row
     else return ()
 
   let parts = buildParts opts rootPc mat genAfterRow

@@ -37,10 +37,15 @@ module SerialComposer
   , realizeSectionsGroove
   , exportLilyPondParts
   , exportMusicXMLParts
+
+  , InvarianceMatch(..)
+  , allRowForms
+  , scanRowInvariance
+  , printRowInvariance
   ) where
 
 import Prelude hiding (span)
-import Data.List (sortBy, intercalate, nub)
+import Data.List (sortBy, intercalate, nub, sort)
 import Data.Ord (comparing)
 import System.Random (StdGen, randomR, randoms, split)
 import Text.Printf (printf)
@@ -415,6 +420,96 @@ printSegLine rootOffset (idx, info) = do
   where
     padRight len str = str ++ replicate (max 0 (len - length str)) ' '
 
+--------------------------------------------------------------------------------
+-- 4N Row-Invariance & Segment-Preservation Scanner
+--------------------------------------------------------------------------------
+
+data InvarianceMatch = InvarianceMatch
+  { imLabel        :: String   -- ^ e.g. "P0", "I5", "RI11"
+  , imNotes        :: [PitchClass]
+  , imSameSet      :: Bool     -- ^ True if unordered pitch-class content equals P0
+  , imFixedSlots   :: Int      -- ^ Count of ordinal positions i where form[i] == P0[i]
+  , imPreservedK   :: [(Int, String)] -- ^ (Segment size k, "exact order" or "permuted")
+  } deriving (Show, Eq)
+
+-- | Generates all 4 * N row forms: (Label, Row) for P, R, I, and RI,
+-- using the exact transposition labels from the N x N matrix headers.
+allRowForms :: Int -> [PitchClass] -> [(String, [PitchClass])]
+allRowForms m row =
+  let mat = generateMatrix m row
+      n   = length row
+      rowHeaders = case mat of
+                     (firstRow : _) -> map (\x -> (m - x) `mod` m) firstRow
+                     _              -> enumFromTo 0 (n - 1)
+      colHeaders = case mat of
+                     (firstRow : _) -> firstRow
+                     _              -> enumFromTo 0 (n - 1)
+      idx = enumFromTo 0 (n - 1)
+   in [ ("P"  ++ show (rowHeaders !! i), getPrime mat i)               | i <- idx ]
+   ++ [ ("R"  ++ show (rowHeaders !! i), getRetrograde mat i)          | i <- idx ]
+   ++ [ ("I"  ++ show (colHeaders !! i), getInversion mat i)           | i <- idx ]
+   ++ [ ("RI" ++ show (colHeaders !! i), getRetrogradeInversion mat i) | i <- idx ]
+
+-- | Scans all 4 * m row forms against P0 for:
+-- 1. Unordered pitch-class set invariance (when N < m)
+-- 2. Discrete k-note partition preservation (exact slot order or permuted)
+-- 3. Fixed ordinal positions (for N >= 4, highlights forms locking >= 2 positions)
+scanRowInvariance :: Int -> [PitchClass] -> [InvarianceMatch]
+scanRowInvariance m row =
+  let n = length row
+      p0Set = PCS.makeSet row
+      divisors = [ k | k <- enumFromTo 3 (n - 1), n `mod` k == 0 ]
+      p0Parts = [ (k, map PCS.makeSet (partitionRow k row)) | k <- divisors ]
+      forms = allRowForms m row
+      evaluate (lbl, r) =
+        let sameSet = n < m && PCS.makeSet r == p0Set
+            fixed   = length [ () | (a, b) <- zip row r, a == b ]
+            presK   = [ (k, mode)
+                      | (k, origSegs) <- p0Parts
+                      , let candSegs = map PCS.makeSet (partitionRow k r)
+                      , Just mode <- [ if candSegs == origSegs
+                                         then Just "exact slot order"
+                                         else if sort candSegs == sort origSegs
+                                                then Just "permuted slots"
+                                                else Nothing
+                                     ]
+                      ]
+            minFixed = if n >= 6 then 3 else 2
+         in if lbl /= "P0" && (sameSet || not (null presK) || fixed >= minFixed)
+              then Just InvarianceMatch
+                     { imLabel      = lbl
+                     , imNotes      = r
+                     , imSameSet    = sameSet
+                     , imFixedSlots = fixed
+                     , imPreservedK = presK
+                     }
+              else Nothing
+   in [ res | pair <- forms, Just res <- [evaluate pair] ]
+
+-- | Prints a clean report of invariant row forms across all 4 * length row matrix transformations.
+printRowInvariance :: Int -> Int -> [PitchClass] -> IO ()
+printRowInvariance m rootOffset row = do
+  let matches = scanRowInvariance m row
+  putStrLn $ "\n=== Matrix Row-Invariance Scan (" ++ show (4 * length row) ++ " Forms vs. P0) ==="
+  if null matches
+    then putStrLn "No non-trivial segment, pitch-set, or positional invariances found."
+    else mapM_ (printMatchLine m rootOffset) matches
+
+printMatchLine :: Int -> Int -> InvarianceMatch -> IO ()
+printMatchLine m rootOffset im = do
+  let trans = map (\p -> (p + rootOffset) `mod` m) (imNotes im)
+      noteStr = if m == 12
+                  then unwords (map pcToNoteName trans)
+                  else intercalate "," (map show trans)
+      tags = [ "Same PC-set" | imSameSet im ]
+          ++ [ "Preserves " ++ show k ++ "-note segments (" ++ mode ++ ")"
+             | (k, mode) <- imPreservedK im ]
+          ++ [ show (imFixedSlots im) ++ " fixed slot(s)" | imFixedSlots im > 0 ]
+  putStrLn $ "  " ++ padRight 5 (imLabel im)
+          ++ " [" ++ noteStr ++ "]"
+  putStrLn $ "        -> " ++ intercalate " | " tags
+  where
+    padRight len str = str ++ replicate (max 0 (len - length str)) ' '
 
 --------------------------------------------------------------------------------
 -- Derived & All-Interval 12-Tone Row Generators
