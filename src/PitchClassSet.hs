@@ -45,6 +45,9 @@ module PitchClassSet
   , CombinatorialityResult(..)
   , analyzeCombinatoriality
 
+  , inversionCommonTones
+  , solveTransformations
+
   ) where
 
 import Data.List (find, intercalate, minimumBy, nub, sort, subsequences, tails)
@@ -143,6 +146,26 @@ commonTones :: PCSet -> [(Int, Int)]
 commonTones raw =
   let s = makeSet raw
    in [ (n, length [ x | x <- s, x `elem` transposeSet n s ]) | n <- enumFromTo 0 11 ]
+
+--------------------------------------------------------------------------------
+-- Exact Tn / TnI Transformation Solver & Inversional Common Tones
+--------------------------------------------------------------------------------
+
+-- | Returns common tones between S and TnI(S) for all n in 0..11.
+inversionCommonTones :: PCSet -> [(Int, Int)]
+inversionCommonTones raw =
+  let s = makeSet raw
+   in [ (n, length [ x | x <- s, x `elem` invertSet n s ]) | n <- enumFromTo 0 11 ]
+
+-- | Finds all exact operations @(Tn levels, TnI levels)@ such that
+-- @transposeSet n setA == setB@ and @invertSet n setA == setB@.
+solveTransformations :: PCSet -> PCSet -> ([Int], [Int])
+solveTransformations rawA rawB =
+  let a = makeSet rawA
+      b = makeSet rawB
+      tLevels = [ n | n <- enumFromTo 0 11, transposeSet n a == b ]
+      iLevels = [ n | n <- enumFromTo 0 11, invertSet n a == b ]
+   in (tLevels, iLevels)
 
 --------------------------------------------------------------------------------
 -- Complete Allen Forte Set-Class Catalog (3-1 through 9-12)

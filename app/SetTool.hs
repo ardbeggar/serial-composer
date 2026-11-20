@@ -172,6 +172,13 @@ printAnalysis pcs = do
   putStrLn "\n--- Transpositional Common Tones (Tn) ---"
   putStrLn $ unwords [ printf "T%d:%d" t count | (t, count) <- ct ]
 
+  let ict = inversionCommonTones pcs
+      (symT, symI) = solveTransformations pcs pcs
+  putStrLn "\n--- Inversional Common Tones (TnI) ---"
+  putStrLn $ unwords [ printf "T%dI:%d" t count | (t, count) <- ict ]
+  putStrLn $ "Internal Symmetry:  "
+          ++ intercalate ", " ([ "T" ++ show n | n <- symT ] ++ [ "T" ++ show n ++ "I" | n <- symI ])
+
   let simSets = findSimilarSets pcs
   if not (null simSets)
     then do
@@ -196,6 +203,7 @@ printAnalysis pcs = do
             (subsetsOfSize 3 pcs)
     else return ()
 
+
 printComparison :: PCSet -> PCSet -> IO ()
 printComparison setA setB = do
   let pfA  = primeForm setA
@@ -204,6 +212,8 @@ printComparison setA setB = do
       ivB  = intervalVector pfB
       zRel = isZRelated setA setB
       rels = similarityRelation setA setB
+      (tOps, iOps) = solveTransformations setA setB
+      opsList = [ "T" ++ show n | n <- tOps ] ++ [ "T" ++ show n ++ "I" | n <- iOps ]
 
   putStrLn "=== Pitch-Class Set Comparison ==="
   printf "Set A: %-14s -> Forte %-7s (%s)  %s\n"
@@ -212,9 +222,9 @@ printComparison setA setB = do
     (formatSet setB) (forteName setB) (intercalate "," (map show pfB)) (formatVector ivB)
   putStrLn ""
   putStrLn $ "Same Set Class (Tn/TnI): " ++ if pfA == pfB then "Yes" else "No"
+  putStrLn $ "Exact Mapping (A -> B):  " ++ if null opsList then "None (different set classes)" else intercalate ", " opsList
   putStrLn $ "Z-Related Pair:          " ++ if zRel then "Yes (identical interval vector, distinct prime forms)" else "No"
   putStrLn $ "Similarity Relations:    " ++ if null rels then "None" else intercalate ", " rels
-
 
 printKComplex :: PCSet -> IO ()
 printKComplex pcs = do
