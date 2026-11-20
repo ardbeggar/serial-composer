@@ -19,6 +19,9 @@ module PitchClassSet
   , findZMate
   , similarityRelation
   , findSimilarSets
+  , countEmbeddings
+  , findSupersets
+  , findSubsets
   , formatSet
   , formatVector
   ) where
@@ -297,6 +300,50 @@ findSimilarSets raw =
       | entry <- candidates
       , let rels = similarityRelation pf (fePrime entry)
       , not (null rels)
+      ]
+
+--------------------------------------------------------------------------------
+-- Abstract Superset & Subset Catalog Searches
+--------------------------------------------------------------------------------
+
+-- | Counts how many distinct subsets of @superSet@ belong to the set class of @subSet@.
+countEmbeddings :: PCSet -> PCSet -> Int
+countEmbeddings subSet superSet =
+  let subPF   = primeForm subSet
+      superPF = primeForm superSet
+      k       = length subPF
+   in if k >= length superPF || k <= 0
+        then 0
+        else length [ () | (_, pf) <- subsetsOfSize k superPF, pf == subPF ]
+
+-- | Finds all set classes in the Forte catalog (optionally filtered by target cardinality)
+-- that contain @raw@ as an abstract subset, paired with the embedding multiplicity.
+findSupersets :: Maybe Int -> PCSet -> [(ForteEntry, Int)]
+findSupersets mCard raw =
+  let pf = primeForm raw
+      baseCard = length pf
+      candidates = filter (\e -> let c = length (fePrime e)
+                                  in c > baseCard && maybe True (== c) mCard)
+                          forteCatalog
+   in [ (entry, count)
+      | entry <- candidates
+      , let count = countEmbeddings pf (fePrime entry)
+      , count > 0
+      ]
+
+-- | Finds all set classes in the Forte catalog (optionally filtered by target cardinality)
+-- that are abstract subsets of @raw@, paired with the embedding multiplicity.
+findSubsets :: Maybe Int -> PCSet -> [(ForteEntry, Int)]
+findSubsets mCard raw =
+  let pf = primeForm raw
+      baseCard = length pf
+      candidates = filter (\e -> let c = length (fePrime e)
+                                  in c < baseCard && maybe True (== c) mCard)
+                          forteCatalog
+   in [ (entry, count)
+      | entry <- candidates
+      , let count = countEmbeddings (fePrime entry) pf
+      , count > 0
       ]
 
 --------------------------------------------------------------------------------

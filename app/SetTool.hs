@@ -55,6 +55,26 @@ main = do
           exitFailure
         Just pcs -> printAnalysis pcs
 
+    ["supersets", rawSet] ->
+      runCatalogQuery prog "Supersets" (findSupersets Nothing) rawSet
+
+    ["supersets", rawSet, rawCard] ->
+      case readMaybe rawCard of
+        Just c -> runCatalogQuery prog ("Supersets (Cardinality " ++ show c ++ ")") (findSupersets (Just c)) rawSet
+        Nothing -> do
+          putStrLn $ "Error: Invalid cardinality '" ++ rawCard ++ "'."
+          exitFailure
+
+    ["subsets", rawSet] ->
+      runCatalogQuery prog "Subsets" (findSubsets Nothing) rawSet
+
+    ["subsets", rawSet, rawCard] ->
+      case readMaybe rawCard of
+        Just c -> runCatalogQuery prog ("Subsets (Cardinality " ++ show c ++ ")") (findSubsets (Just c)) rawSet
+        Nothing -> do
+          putStrLn $ "Error: Invalid cardinality '" ++ rawCard ++ "'."
+          exitFailure
+
     [rawA, rawB] ->
       case (parseInput rawA, parseInput rawB) of
         (Just setA, Just setB) -> printComparison setA setB
@@ -63,15 +83,40 @@ main = do
           exitFailure
 
     _ -> do
-      putStrLn $ "Usage:"
-      putStrLn $ "  " ++ prog ++ " <set-or-forte-name>             Analyze a single set"
-      putStrLn $ "  " ++ prog ++ " <set-1> <set-2>                 Compare two sets (Z-relation & similarity)"
-      putStrLn $ "Examples:"
-      putStrLn $ "  " ++ prog ++ " 0,1,4,6"
+      putStrLn "Usage:"
+      putStrLn $ "  " ++ prog ++ " <set-or-forte-name>                 Analyze a single set"
+      putStrLn $ "  " ++ prog ++ " <set-1> <set-2>                     Compare two sets (Z-relation & similarity)"
+      putStrLn $ "  " ++ prog ++ " supersets <set> [cardinality]       Find catalog supersets containing <set>"
+      putStrLn $ "  " ++ prog ++ " subsets <set> [cardinality]         Find catalog subsets contained in <set>"
+      putStrLn "Examples:"
       putStrLn $ "  " ++ prog ++ " 4-Z15"
-      putStrLn $ "  " ++ prog ++ " C,Db,Gb,G,Bb"
       putStrLn $ "  " ++ prog ++ " 4-Z15 4-Z29"
+      putStrLn $ "  " ++ prog ++ " supersets 3-5 5"
+      putStrLn $ "  " ++ prog ++ " subsets 6-Z19 4"
       exitFailure
+
+runCatalogQuery :: String -> String -> (PCSet -> [(ForteEntry, Int)]) -> String -> IO ()
+runCatalogQuery _ label searchFn rawSet =
+  case parseInput rawSet of
+    Nothing -> do
+      putStrLn $ "Error: Could not parse pitch-class set or Forte name '" ++ rawSet ++ "'."
+      exitFailure
+    Just pcs -> do
+      let pf = primeForm pcs
+          results = searchFn pf
+      printf "=== %s of %s (%s) ===\n"
+        label (forteName pf) (intercalate "," (map show pf))
+      if null results
+        then putStrLn "No matching set classes found in Forte catalog."
+        else do
+          printf "Found %d set class(es):\n\n" (length results)
+          mapM_ (\(entry, count) ->
+                   printf "  %-7s (%-17s) %s  [x%d]\n"
+                     (feName entry)
+                     (intercalate "," (map show (fePrime entry)))
+                     (formatVector (feVector entry))
+                     count)
+                results
 
 printAnalysis :: PCSet -> IO ()
 printAnalysis pcs = do
