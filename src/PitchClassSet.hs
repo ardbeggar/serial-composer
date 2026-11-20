@@ -1,3 +1,14 @@
+{-|
+Module      : PitchClassSet
+Description : Allen Forte's Pitch-Class Set Theory engine and 208-class catalog
+Stability   : experimental
+
+Pure Haskell implementation of pitch-class set theory as formalized in Allen
+Forte's /The Structure of Atonal Music/ (1973). Supports Normal Order, Prime
+Form, Interval-Class Vectors, Z-relations, similarity relations (@R1@, @R2@,
+@Rp@), and abstract superset\/subset catalog searches.
+-}
+
 module PitchClassSet
   ( PitchClass
   , PCSet

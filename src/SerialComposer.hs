@@ -1,3 +1,14 @@
+{-|
+Module      : SerialComposer
+Description : N x N serial matrix generator, groove realizer, and score exporter
+Stability   : experimental
+
+Generates generalized @N x N@ serial matrices (12-tone or smaller pitch-class
+sets), extracts @P@, @R@, @I@, and @RI@ transformations, realizes rhythmically
+displaced multi-part scores, performs Forte set-class row segmentation, and
+exports to MusicXML and LilyPond.
+-}
+
 module SerialComposer
   ( PitchClass
   , MidiPitch

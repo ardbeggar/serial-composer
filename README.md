@@ -1,6 +1,8 @@
 # SerialComposer
 
-`SerialComposer` is a pure Haskell library and command-line tool (`serial-compose`) for generating **N × N serial matrices** (12-tone or smaller pitch-class sets), applying **rhythm and octave-displacement transformations**, and exporting scores to **MusicXML** (MuseScore) and **LilyPond** (PDF & MIDI).
+`SerialComposer` is a pure Haskell library suite and set of command-line tools (`serial-compose` and `set-tool`) for **N × N serial matrix generation**, **Allen Forte pitch-class set theory analysis**, and **MusicXML / LilyPond score export**.
+
+See [docs/THEORY_AND_USAGE.md](docs/THEORY_AND_USAGE.md) for mathematical definitions and combined composition workflows.
 
 ---
 
@@ -10,17 +12,21 @@
 serial-composer/
 ├── serial-composer.cabal
 ├── README.md
+├── docs/
+│   └── THEORY_AND_USAGE.md
 ├── app/
-│   └── Main.hs
+│   ├── Main.hs           (serial-compose CLI)
+│   └── SetTool.hs        (set-tool CLI)
 └── src/
-    └── SerialComposer.hs
+    ├── SerialComposer.hs (N x N matrix engine, groove realization, score export)
+    └── PitchClassSet.hs  (Allen Forte set theory catalog, Z-relations, similarity & search)
 ```
 
 ---
 
 ## Requirements
 
-- **GHC** (9.8+ compatible, zero `-Wall` or `-Wx-partial` warnings)
+- **GHC** (9.8+ / 9.10+ compatible, compiles cleanly under `-Wall` and `-Wx-partial`)
 - **Cabal** (`cabal-install` 3.0+)
 - **Optional:** [MuseScore](https://musescore.org) for opening `.musicxml` files, or [LilyPond](https://lilypond.org) for compiling `.ly` files to PDF and MIDI.
 
@@ -28,23 +34,29 @@ serial-composer/
 
 ## 1. Building & Installing
 
-Build the library and CLI executable:
+Build both libraries and CLI executables:
 
 ```bash
 cabal build
 ```
 
-Optional: Install `serial-compose` to your local Cabal bin directory (`~/.cabal/bin` or `~/.local/bin`):
+Optional: Install `serial-compose` and `set-tool` to your local Cabal bin directory (`~/.cabal/bin` or `~/.local/bin`):
 
 ```bash
 cabal install
 ```
 
+Generate local Haddock API documentation:
+
+```bash
+cabal haddock --haddock-all
+```
+
 ---
 
-## 2. CLI Usage (`serial-compose`)
+## 2. Serial Matrix & Score Generator (`serial-compose`)
 
-Run directly via `cabal run serial-compose -- [OPTIONS...]` or using the installed `serial-compose` binary.
+Run via `cabal run serial-compose -- [OPTIONS...]` or using the installed `serial-compose` binary.
 
 ### Available Flags
 
@@ -58,37 +70,78 @@ Run directly via `cabal run serial-compose -- [OPTIONS...]` or using the install
 | `-o` | `--octave` | `INT` | Override base octave for guitar (default: auto based on root) |
 | `-p` | `--part` | `MODE` | Instrument mode: `guitar`, `bass`, or `duo` (default: `duo`) |
 | | `--plain` | | Use plain quarter notes without rhythm/octave displacement |
+| `-a` | `--analyze` | | Print Forte pitch-class set segmentation of P0 (requires `--mod 12`) |
 | `-t` | `--tempo` | `BPM` | Tempo in BPM for LilyPond MIDI export (default: `75`) |
 | `-f` | `--out` | `PREFIX` | Output filename prefix without extension (default: `serial_output`) |
 | `-h` | `--help` | | Show help message |
 
-### CLI Examples
+### Examples
 
 **Generate a random 5-tone Drop B Guitar + Bass counterpoint score with a fixed seed:**
+
 ```bash
 cabal run serial-compose -- --length 5 --root B --seed 42 --tempo 68 --out doom_b
 ```
 
-**Use a custom note-name row in Drop C (Duo mode):**
-```bash
-cabal run serial-compose -- --row "C,Db,E,Gb,G,Bb" --root C --part duo --out drop_c_hex
-```
+**Analyze the discrete partitions and sliding windows of a 12-tone row using Forte set theory:**
 
-**Use a custom integer pitch-class row in Drop B:**
 ```bash
-cabal run serial-compose -- -w 0,1,6,7,10 -r B -s 99 -f custom_doom_b
+cabal run serial-compose -- -n 12 -r C -s 42 --analyze
 ```
 
 **Export a clean, un-displaced solo guitar study sheet in Drop D:**
+
 ```bash
 cabal run serial-compose -- -w "0,1,6,7,10" -r D -p guitar --plain -f drop_d_study
 ```
 
 ---
 
-## 3. Tuning Reference (`rootOffset` & `baseOctave`)
+## 3. Pitch-Class Set Theory Tool (`set-tool`)
 
-When using the CLI `--root` flag (without `--octave`), octaves are selected automatically for low tunings (`A1`–`B1` for A/Bb/B, `C2`–`Ab2` for C–Ab), with Bass placed one octave lower. For direct GHCi library calls, use these reference values:
+`set-tool` implements Allen Forte's *The Structure of Atonal Music*, including the complete 208-class Forte catalog (`3-1` through `9-12`), Normal Order, Prime Form, Interval-Class Vectors, Z-relations, similarity relations (`R1`, `R2`, `Rp`), and abstract superset/subset searches.
+
+### Commands
+
+| Command | Description |
+| :--- | :--- |
+| `set-tool <set-or-forte-name>` | Full analysis: Normal Order, Prime Form, Interval Vector, Complement, Z-Mate, `Tn` common tones, `R1`/`R2`/`Rp` similar sets, and embedded trichords |
+| `set-tool <set-1> <set-2>` | Compare two sets for `Tn`/`TnI` equivalence, Z-relation, and `R1`/`R2`/`Rp` similarity |
+| `set-tool supersets <set> [card]` | Find all Forte catalog supersets containing `<set>` (optionally filtered to target cardinality `card`), with embedding multiplicity `[xN]` |
+| `set-tool subsets <set> [card]` | Find all Forte catalog subsets contained in `<set>` (optionally filtered to target cardinality `card`), with embedding multiplicity `[xN]` |
+
+### Examples
+
+**Analyze a set by pitch-class integers, note names, or Forte catalog name:**
+
+```bash
+cabal run set-tool -- 0,1,4,6
+cabal run set-tool -- C,Db,Gb,G,Bb
+cabal run set-tool -- 4-Z15
+```
+
+**Compare two sets for Z-relations and interval-vector similarity:**
+
+```bash
+cabal run set-tool -- 4-Z15 4-Z29
+cabal run set-tool -- 0,1,6 0,1,4
+```
+
+**Search the Forte catalog for supersets or subsets:**
+
+```bash
+# Find all pentachords containing the Viennese trichord 3-5 (0,1,6)
+cabal run set-tool -- supersets 3-5 5
+
+# Find all tetrachord subsets inside 5-19 (0,1,3,6,7)
+cabal run set-tool -- subsets 5-19 4
+```
+
+---
+
+## 4. Tuning Reference (`rootOffset` & `baseOctave`)
+
+When using `serial-compose --root` (without `--octave`), octaves are selected automatically for low tunings (`A1`–`B1` for A/Bb/B, `C2`–`Ab2` for C–Ab), with Bass placed one octave lower:
 
 | Tuning | Lowest Pitch | `rootOffset` | `baseOctave` (Guitar) | `baseOctave` (Bass) |
 | :--- | :--- | :---: | :---: | :---: |
@@ -100,73 +153,44 @@ When using the CLI `--root` flag (without `--octave`), octaves are selected auto
 
 ---
 
-## 4. Using `SerialComposer` as a Library in GHCi
+## 5. Using the Libraries in GHCi
 
-Launch an interactive session with the library loaded:
+Launch an interactive session with both `SerialComposer` and `PitchClassSet` loaded:
 
 ```bash
 cabal repl
 ```
 
-### Generate & Inspect a Matrix
-
 ```haskell
 import SerialComposer
+import PitchClassSet
 import System.Random (mkStdGen)
 
--- 1. Generate a random 6-tone row in chromatic space (mod 12)
-let (randRow, g1) = randomRow 12 6 (mkStdGen 42)
+-- Analyze a set using PitchClassSet
+let s = makeSet [0, 1, 6, 7, 10]
+forteName s          -- "5-19"
+primeForm s          -- [0,1,3,6,7]
+intervalVector s     -- [2,2,1,1,3,1]
+findSupersets (Just 6) [0, 1, 6]
 
--- Or define a custom 5-tone row manually:
-let doomRow = [0, 1, 6, 7, 10]
-
--- 2. Build the N x N matrix
-let mat = generateMatrix 12 doomRow
-
--- 3. Print raw pitch-class integers (0-11)
-printMatrix mat
-
--- 4. Print transposed note names (e.g., root = 11 for Drop B)
+-- Generate a matrix and inspect its Forte segmentation
+let mat = generateMatrix 12 s
 printNoteMatrix 11 mat
-```
-
-### Extract Row Transformations
-
-```haskell
-let p0  = getPrime mat 0               -- First row (left -> right)
-let r0  = getRetrograde mat 0          -- First row (right -> left)
-let i0  = getInversion mat 0           -- First column (top -> bottom)
-let ri2 = getRetrogradeInversion mat 2 -- Third column (bottom -> top)
-```
-
-### Export Custom Multi-Part Scores
-
-```haskell
-let gtrRows  = [("Section A", getPrime mat 0), ("Section B", getInversion mat 0)]
-let bassRows = [("Section A", getRetrograde mat 2), ("Section B", getRetrogradeInversion mat 3)]
-
-let (gtrSecs, genAfterGtr) = realizeSectionsGroove 11 1 2 25 (mkStdGen 77) gtrRows
-let (bassSecs, _)          = realizeSectionsGroove 11 0 1 10 genAfterGtr bassRows
-
-let fullScore =
-      [ PartSpec "Distorted Guitar" "guitar" "distorted guitar" gtrSecs
-      , PartSpec "Distorted Bass"   "bass"   "electric bass (pick)" bassSecs
-      ]
-
-exportMusicXMLParts "doom_counterpoint.musicxml" fullScore
-exportLilyPondParts "doom_counterpoint.ly" 68 fullScore
+printRowSegmentation 11 s
 ```
 
 ---
 
-## 5. Compiling & Viewing Scores
+## 6. Compiling & Viewing Scores
 
 ### MuseScore (MusicXML)
+
 ```bash
 mscore doom_b.musicxml
 ```
 
 ### LilyPond (PDF Sheet Music + Audio MIDI)
+
 ```bash
 lilypond doom_b.ly
 # Generates doom_b.pdf and doom_b.midi
