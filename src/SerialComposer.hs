@@ -46,10 +46,14 @@ module SerialComposer
   , multiplyRow
   , m5Row
   , m7Row
+
+  , rotationalArray
+  , rotationalVerticals
+  , printRotationalArray
   ) where
 
 import Prelude hiding (span)
-import Data.List (sortBy, intercalate, nub, sort)
+import Data.List (sortBy, intercalate, nub, sort, transpose)
 import Data.Ord (comparing)
 import System.Random (StdGen, randomR, randoms, split)
 import Text.Printf (printf)
@@ -524,6 +528,74 @@ printMatchLine m rootOffset im = do
   putStrLn $ "  " ++ padRight 5 (imLabel im)
           ++ " [" ++ noteStr ++ "]"
   putStrLn $ "        -> " ++ intercalate " | " tags
+  where
+    padRight len str = str ++ replicate (max 0 (len - length str)) ' '
+
+--------------------------------------------------------------------------------
+-- Stravinsky / Krenek Rotational Arrays & Vertical Forte Analysis
+--------------------------------------------------------------------------------
+
+-- | Builds a Stravinsky rotational array from an N-note row:
+-- Generates all N cyclic rotations, then transposes each rotation so its
+-- initial pitch class matches the first pitch class of @row@.
+rotationalArray :: Int -> [PitchClass] -> [[PitchClass]]
+rotationalArray m row =
+  case row of
+    [] -> []
+    (anchor : _) ->
+      let n = length row
+          rots = take n (iterate rotateLeft row)
+          align rot =
+            case rot of
+              (firstPc : _) ->
+                let shift = (anchor - firstPc) `mod` m
+                 in map (\x -> (x + shift) `mod` m) rot
+              [] -> []
+       in map align rots
+  where
+    rotateLeft (x : xs) = xs ++ [x]
+    rotateLeft []   = []
+
+-- | Extracts the vertical columns (chords) of a rotational array, skipping Column 0
+-- (which is always a unison of the anchor pitch).
+rotationalVerticals :: Int -> [PitchClass] -> [[PitchClass]]
+rotationalVerticals m row =
+  case transpose (rotationalArray m row) of
+    (_ : cols) -> cols
+    []     -> []
+
+-- | Prints the Stravinsky rotational array and analyzes every vertical column
+-- using Allen Forte pitch-class set theory (when modulus == 12).
+printRotationalArray :: Int -> Int -> [PitchClass] -> IO ()
+printRotationalArray m rootOffset row = do
+  let arr   = rotationalArray m row
+      verts = rotationalVerticals m row
+      shift p = (p + rootOffset) `mod` m
+      fmtPitch p = if m == 12 then pcToNoteName (shift p) else show (shift p)
+  putStrLn $ "\n=== Stravinsky Rotational Array (" ++ show (length row) ++ " x " ++ show (length row) ++ ") ==="
+  mapM_ (\(idx, rot) -> do
+           let cells = unwords [ padRight 3 (fmtPitch p) | p <- rot ]
+           putStrLn $ "  Rot " ++ padRight 2 (show idx) ++ " | " ++ cells)
+        (zip (enumFromTo 0 (length arr - 1)) arr)
+
+  if m == 12
+    then do
+      putStrLn "\n--- Vertical Column Chords (Forte Set-Class Analysis) ---"
+      mapM_ (\(colIdx, colPitches) -> do
+               let uniqSet = PCS.makeSet colPitches
+                   notes   = unwords [ fmtPitch p | p <- colPitches ]
+                   pcsStr  = "[" ++ intercalate "," (map show uniqSet) ++ "]"
+                   pf      = PCS.primeForm uniqSet
+                   pfStr   = "(" ++ intercalate "," (map show pf) ++ ")"
+                   ivStr   = PCS.formatVector (PCS.intervalVector pf)
+               putStrLn $ "  Col " ++ padRight 2 (show colIdx)
+                       ++ ": " ++ padRight 18 notes
+                       ++ " -> " ++ padRight 15 pcsStr
+                       ++ " Forte " ++ padRight 12 (PCS.forteName uniqSet)
+                       ++ " " ++ padRight 13 pfStr
+                       ++ " " ++ ivStr)
+            (zip (enumFromTo 1 (length verts)) verts)
+    else return ()
   where
     padRight len str = str ++ replicate (max 0 (len - length str)) ' '
 

@@ -24,6 +24,7 @@ data Options = Options
   , optAnalyze     :: Bool
   , optM5          :: Bool
   , optM7          :: Bool
+  , optRotate      :: Bool
   , optInvariance  :: Bool
   , optPlain       :: Bool
   , optBpm         :: Int
@@ -45,6 +46,7 @@ defaultOptions = Options
   , optAnalyze     = False
   , optM5          = False
   , optM7          = False
+  , optRotate      = False
   , optInvariance  = False
   , optPlain       = False
   , optBpm         = 75
@@ -90,6 +92,9 @@ options =
   , Option [] ["m7"]
       (NoArg (\opts -> opts { optM7 = True }))
       "Apply M7 cycle-of-fifths transform (x -> 7x mod m) to the row"
+  , Option ['R'] ["rotate"]
+      (NoArg (\opts -> opts { optRotate = True }))
+      "Print Stravinsky rotational array and vertical column Forte analysis"
   , Option ['v'] ["invariance"]
       (NoArg (\opts -> opts { optInvariance = True }))
       "Scan all 4N matrix forms for segment, pitch-set, and positional invariance"
@@ -266,6 +271,10 @@ main = do
 
   if optInvariance opts
     then printRowInvariance m rootPc row
+    else return ()
+
+  if optRotate opts
+    then printRotationalArray m rootPc row
     else return ()
 
   let parts = buildParts opts rootPc mat genAfterRow
