@@ -4,6 +4,7 @@ import Control.Applicative ((<|>))
 import Data.Char (isSpace, toUpper)
 import Data.List (elemIndex, intercalate)
 import PitchClassSet
+import Polytonal
 import System.Environment (getArgs, getProgName)
 import System.Exit (exitFailure)
 import Text.Printf (printf)
@@ -120,6 +121,13 @@ main = do
           exitFailure
         Just pcs -> printCycleFits pcs
 
+    ["poly", rawA, rawB] ->
+      case (parseLayerSpec rawA, parseLayerSpec rawB) of
+        (Just layA, Just layB) -> printPolyAnalysis (analyzeBitonal layA layB)
+        _ -> do
+          putStrLn "Error: Could not parse one or both tonal layers (e.g. B:phrygian or 11,2,6)."
+          exitFailure
+
     [rawA, rawB] ->
       case (parseInput rawA, parseInput rawB) of
         (Just setA, Just setB) -> printComparison setA setB
@@ -139,6 +147,7 @@ main = do
       putStrLn $ "  " ++ prog ++ " voicelead <src> <target-class>    Find most parsimonious Tn/TnI voice-leadings"
       putStrLn $ "  " ++ prog ++ " cycle <k | k1,k2> [start]       Generate basic Ck or alternating Alt(k1,k2) cycle"
       putStrLn $ "  " ++ prog ++ " cycle-fit <set>                 Find interval cycles containing <set>"
+      putStrLn $ "  " ++ prog ++ " poly <layerA> <layerB>            Analyze bitonal friction & resolution traps"
       putStrLn "Examples:"
       putStrLn $ "  " ++ prog ++ " 4-Z15"
       putStrLn $ "  " ++ prog ++ " 4-Z15 4-Z29"
@@ -417,3 +426,49 @@ printCycleFits pcs = do
                  (cfForteName cf)
                  (if cfIsContig cf then "[CONTIGUOUS]" else "[SUBSET]"))
             fits
+
+printPolyAnalysis :: PolyAnalysis -> IO ()
+printPolyAnalysis pa = do
+  let layA = paLayerA pa
+      layB = paLayerB pa
+      fmtPCs xs = if null xs then "None" else intercalate ", " (map pcName xs)
+      fmtPairs ps = if null ps
+                      then "None"
+                      else intercalate ", " [ pcName a ++ "-" ++ pcName b | (a, b) <- ps ]
+  putStrLn "=== Polytonal / Bitonal Ambiguity Analysis ==="
+  printf "Layer A:           %-22s %s\n" (plLabel layA) (formatSet (plPitches layA))
+  printf "Layer B:           %-22s %s\n" (plLabel layB) (formatSet (plPitches layB))
+  printf "Combined Union:    %s -> Forte %-8s (%s)  %s\n"
+    (formatSet (paUnion pa))
+    (paUnionForte pa)
+    (intercalate "," (map show (paUnionPrime pa)))
+    (formatVector (paUnionVector pa))
+  printf "Ambiguity Score:   %d / 100\n" (paAmbiguityScore pa)
+  putStrLn $ "Assessment:        " ++ paVerdict pa
+
+  putStrLn "\n--- Bitonal Friction vs. Absorption ---"
+  putStrLn $ "Shared Pivot PCs:  " ++ fmtPCs (paSharedPitches pa)
+  putStrLn $ "Cross Half-Steps:  " ++ fmtPairs (paCrossHalfSteps pa)
+  putStrLn $ "Cross Tritones:    " ++ fmtPairs (paCrossTritones pa)
+
+  putStrLn "\n--- Anti-Resolution & Scale-Collapse Warnings ---"
+  if null (paParentScaleHits pa)
+    then putStrLn "Parent Scale Fit:  None (avoids single-scale diatonic/minor absorption)"
+    else putStrLn $ "Parent Scale Fit:  WARNING — fits inside "
+                 ++ intercalate ", " (paParentScaleHits pa)
+
+  if null (paDominantTraps pa)
+    then putStrLn "Accidental V7s:    None detected across layers"
+    else do
+      putStrLn "Accidental V7s:    WARNING — cross-layer dominant 7th chords detected:"
+      mapM_ (\dt -> do
+               let (thirdPc, seventhPc) = dtTritone dt
+                   res3 = (thirdPc + 1) `mod` 12
+                   res7 = (seventhPc - 1) `mod` 12
+               printf "  * %s7 (%s) pulls toward Tonic %s (avoid resolving tritone %s-%s -> %s-%s)\n"
+                 (pcName (dtDomRoot dt))
+                 (intercalate "," (map pcName (dtDomPitches dt)))
+                 (pcName (dtTargetTonic dt))
+                 (pcName thirdPc) (pcName seventhPc)
+                 (pcName res3) (pcName res7))
+            (paDominantTraps pa)
