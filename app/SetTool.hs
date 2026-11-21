@@ -163,6 +163,24 @@ main = do
             Nothing -> exitFailure
             Just mpa -> printMultiPolyAnalysis mpa
 
+    ["poly-multi-partners", rawA, rawB] ->
+      case (parseLayerSpec rawA, parseLayerSpec rawB) of
+        (Just layA, Just layB) -> printMultiPolyPartners [layA, layB] Nothing
+        _ -> do
+          putStrLn "Error: Could not parse one or more tonal layers."
+          exitFailure
+
+    ["poly-multi-partners", rawA, rawB, rawMode] ->
+      case (parseLayerSpec rawA, parseLayerSpec rawB, parseModeName rawMode) of
+        (Just layA, Just layB, Just (_, mode)) ->
+          printMultiPolyPartners [layA, layB] (Just mode)
+        (_, _, Nothing) -> do
+          putStrLn $ "Error: Unknown mode or chord type '" ++ rawMode ++ "'."
+          exitFailure
+        _ -> do
+          putStrLn "Error: Could not parse one or more tonal layers."
+          exitFailure
+
     [rawA, rawB] ->
       case (parseInput rawA, parseInput rawB) of
         (Just setA, Just setB) -> printComparison setA setB
@@ -186,6 +204,7 @@ main = do
       putStrLn $ "  " ++ prog ++ " poly-step <A1> <B1> <A2> <B2>     Validate transition against accidental resolutions"
       putStrLn $ "  " ++ prog ++ " poly-partners <layerA> [mode]     Rank highest-ambiguity bitonal partners"
       putStrLn $ "  " ++ prog ++ " poly-multi <L1> <L2> <L3> [...]   Analyze 3+ simultaneous tonal layers"
+      putStrLn $ "  " ++ prog ++ " poly-multi-partners <L1> <L2> [m] Rank best 3rd tonal layer to add to L1 + L2"
       putStrLn "Examples:"
       putStrLn $ "  " ++ prog ++ " 4-Z15"
       putStrLn $ "  " ++ prog ++ " 4-Z15 4-Z29"
@@ -614,3 +633,29 @@ printMultiPolyAnalysis mpa = do
                  (pcName thirdPc) (pcName seventhPc)
                  (pcName res3) (pcName res7))
             (mpGlobalDomTraps mpa)
+
+printMultiPolyPartners :: [PolyLayer] -> Maybe ScaleMode -> IO ()
+printMultiPolyPartners baseLayers mMode = do
+  let ranked = take 12 (findMultiPolyPartners baseLayers mMode)
+      baseLabel = intercalate " + " (map plLabel baseLayers)
+  printf "=== Top 3rd-Layer Polytonal Additions for [%s] ===\n\n" baseLabel
+  mapM_ (\mpa -> do
+           let addedLayer = lastSafe (mpLayers mpa)
+               trapFlag = if null (mpGlobalDomTraps mpa)
+                            then "0 V7 traps"
+                            else show (length (mpGlobalDomTraps mpa)) ++ " V7 trap(s)"
+               scaleFlag = if null (mpParentScaleHits mpa)
+                             then "No collapse"
+                             else "1-scale collapse"
+           printf "  [Score: %3d]  + %-18s -> Union %2d/12 (%-8s) | %-16s | %s\n"
+             (mpOverallAmbiguity mpa)
+             (plLabel addedLayer)
+             (length (mpUnion mpa))
+             (mpUnionForte mpa)
+             scaleFlag
+             trapFlag)
+        ranked
+  where
+    lastSafe [x]      = x
+    lastSafe (_ : xs) = lastSafe xs
+    lastSafe _        = PolyLayer "?" Nothing mempty

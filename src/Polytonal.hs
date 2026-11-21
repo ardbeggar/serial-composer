@@ -24,6 +24,7 @@ module Polytonal
   , parseModeName
   , MultiPolyAnalysis(..)
   , analyzeMultiPoly
+  , findMultiPolyPartners
   ) where
 
 import Control.Applicative ((<|>))
@@ -542,3 +543,64 @@ analyzeMultiPoly layers
             , mpOverallAmbiguity = clamped
             , mpVerdict          = verdict
             }
+
+--------------------------------------------------------------------------------
+-- Multi-Layer Non-Resolving Partner Finder
+--------------------------------------------------------------------------------
+
+-- | Given an existing list of 2 or more tonal layers, searches all 12 root
+-- transpositions of the requested candidate mode(s) for the best additional layer,
+-- ranked by highest overall ambiguity, zero V7 traps, and non-aggregate clarity.
+findMultiPolyPartners :: [PolyLayer] -> Maybe ScaleMode -> [MultiPolyAnalysis]
+findMultiPolyPartners existingLayers mMode
+  | length existingLayers < 2 = mempty
+  | otherwise =
+      let existingSets = map plPitches existingLayers
+          candidateModes =
+            case mMode of
+              Just m  -> [(modeLabel m, m)]
+              Nothing ->
+                [ ("Major Triad",   ChordMajorTriad)
+                , ("Minor Triad",   ChordMinorTriad)
+                , ("Natural Minor", ModeNaturalMinor)
+                , ("Phrygian",      ModePhrygian)
+                , ("Lydian",        ModeLydian)
+                , ("Locrian",       ModeLocrian)
+                ]
+          analyses =
+            [ mpa
+            | (mLbl, mode) <- candidateModes
+            , r <- enumFromTo 0 11
+            , let cand = buildLayer (pcName r ++ " " ++ mLbl) r mode
+            , plPitches cand `notElem` existingSets
+            , Just mpa <- [analyzeMultiPoly (existingLayers ++ [cand])]
+            ]
+          -- Rank by:
+          -- (1) No single-scale collapse
+          -- (2) Zero accidental V7 resolution traps
+          -- (3) Avoids total 12/12 chromatic wash (keeps distinct harmonic identity)
+          -- (4) Highest overall multi-layer ambiguity score
+          rankKey mpa =
+            ( null (mpParentScaleHits mpa)
+            , null (mpGlobalDomTraps mpa)
+            , length (mpUnion mpa) < 12
+            , mpOverallAmbiguity mpa
+            )
+       in sortBy (comparing (Down . rankKey)) analyses
+  where
+    modeLabel ModeMajor         = "Major"
+    modeLabel ModeNaturalMinor  = "Natural Minor"
+    modeLabel ModeHarmonicMinor = "Harmonic Minor"
+    modeLabel ModeMelodicMinor  = "Melodic Minor"
+    modeLabel ModeDorian        = "Dorian"
+    modeLabel ModePhrygian      = "Phrygian"
+    modeLabel ModeLydian        = "Lydian"
+    modeLabel ModeMixolydian    = "Mixolydian"
+    modeLabel ModeLocrian       = "Locrian"
+    modeLabel ChordMajorTriad   = "Major Triad"
+    modeLabel ChordMinorTriad   = "Minor Triad"
+    modeLabel ChordDimTriad     = "Diminished Triad"
+    modeLabel ChordAugTriad     = "Augmented Triad"
+    modeLabel ChordDom7         = "Dominant 7th"
+    modeLabel ChordMaj7         = "Major 7th"
+    modeLabel ChordMin7         = "Minor 7th"
