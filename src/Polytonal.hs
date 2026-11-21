@@ -17,11 +17,14 @@ module Polytonal
   , buildLayer
   , parseLayerSpec
   , analyzeBitonal
+  , StepHazard(..)
+  , PolyStepReport(..)
+  , evaluatePolyStep
   ) where
 
 import Control.Applicative ((<|>))
 import Data.Char (isSpace, toLower, toUpper)
-import Data.List (elemIndex, intercalate)
+import Data.List (elemIndex, intercalate, nub)
 import PitchClassSet
   ( IntervalVector
   , PCSet
@@ -285,4 +288,112 @@ analyzeBitonal layA layB =
         , paDominantTraps   = traps
         , paAmbiguityScore  = clamped
         , paVerdict         = verdict
+        }
+
+--------------------------------------------------------------------------------
+-- Polytonal Progression & Anti-Resolution Step Validator
+--------------------------------------------------------------------------------
+
+data StepHazard = StepHazard
+  { shCategory    :: String -- ^ e.g. "Tritone Resolution", "Leading-Tone Cadence", "Parallel Root Lock", "Tonal Collapse"
+  , shDescription :: String -- ^ Detailed musical explanation and pitches involved
+  } deriving (Show, Eq)
+
+data PolyStepReport = PolyStepReport
+  { psState1       :: PolyAnalysis
+  , psState2       :: PolyAnalysis
+  , psCommonTones  :: PCSet        -- ^ Pitches held stationary from (A1 U B1) to (A2 U B2)
+  , psHazards      :: [StepHazard] -- ^ Detected resolution or absorption hazards
+  , psPreservesAmb :: Bool         -- ^ True if zero hazards and State 2 maintains ambiguity >= 50
+  } deriving (Show, Eq)
+
+-- | Evaluates a progression step @(layA1, layB1) -> (layA2, layB2)@ for accidental
+-- tonal resolutions, tritone discharges, parallel root locking, and single-key collapse.
+evaluatePolyStep :: (PolyLayer, PolyLayer) -> (PolyLayer, PolyLayer) -> PolyStepReport
+evaluatePolyStep (a1, b1) (a2, b2) =
+  let an1 = analyzeBitonal a1 b1
+      an2 = analyzeBitonal a2 b2
+      u1  = paUnion an1
+      u2  = paUnion an2
+      held = [ x | x <- u1, x `elem` u2 ]
+
+      -- 1. Check all tritones in State 1 for contrary-motion semitone resolution into State 2
+      tritones1 = [ (x, y) | x <- u1, y <- u1, x < y, (y - x) `mod` 12 == 6 ]
+      tritoneHazards =
+        [ StepHazard
+            { shCategory = "Tritone Resolution"
+            , shDescription =
+                "Tritone " ++ pcName x ++ "-" ++ pcName y
+                ++ " in State 1 resolves by semitone to "
+                ++ pcName rx ++ "-" ++ pcName ry
+                ++ " in State 2 (triggers V7 -> I tonal gravity)."
+            }
+        | (x, y) <- tritones1
+        , (rx, ry) <- [ ((x + 1) `mod` 12, (y - 1) `mod` 12)
+                      , ((x - 1) `mod` 12, (y + 1) `mod` 12)
+                      ]
+        , rx `elem` u2 && ry `elem` u2
+        ]
+
+      -- 2. Check leading-tone (+1 semitone) resolution into State 2 layer roots
+      targetRoots = nub [ r | Just r <- [plRoot a2, plRoot b2] ]
+      ltHazards =
+        [ StepHazard
+            { shCategory = "Leading-Tone Cadence"
+            , shDescription =
+                "Leading tone " ++ pcName lt ++ " in State 1 resolves up by half-step to root "
+                ++ pcName r ++ " in State 2."
+            }
+        | r <- targetRoots
+        , let lt = (r - 1) `mod` 12
+        , lt `elem` u1 && r `elem` u2 && lt `notElem` u2
+        ]
+
+      -- 3. Check parallel fifths/octaves/unisons between explicit layer roots
+      parallelHazards =
+        case (plRoot a1, plRoot b1, plRoot a2, plRoot b2) of
+          (Just rA1, Just rB1, Just rA2, Just rB2) ->
+            let span1 = (rB1 - rA1) `mod` 12
+                span2 = (rB2 - rA2) `mod` 12
+                moveA = (rA2 - rA1) `mod` 12
+                moveB = (rB2 - rB1) `mod` 12
+             in [ StepHazard
+                    { shCategory = "Parallel Layer Lock"
+                    , shDescription =
+                        "Both layer roots move in parallel (" ++ pcName rA1 ++ "->" ++ pcName rA2
+                        ++ " and " ++ pcName rB1 ++ "->" ++ pcName rB2
+                        ++ ") at a consonant interval (" ++ show span1 ++ " semitones), fusing two keys into one stream."
+                    }
+                | moveA /= 0 && moveA == moveB && span1 == span2 && (span1 == 0 || span1 == 5 || span1 == 7)
+                ]
+          _ -> mempty
+
+      -- 4. Check if State 2 collapses into a single triad or single diatonic/minor scale
+      collapseHazards =
+        [ StepHazard
+            { shCategory = "Single-Triad Resolution"
+            , shDescription =
+                "State 2 collapses into a single consonant triad (" ++ paUnionForte an2
+                ++ "), terminating polytonal tension."
+            }
+        | paUnionForte an2 == "3-11"
+        ]
+        ++
+        [ StepHazard
+            { shCategory = "Single-Scale Absorption"
+            , shDescription =
+                "State 2 falls completely inside one tonal scale ("
+                ++ intercalate ", " (take 2 (paParentScaleHits an2)) ++ ")."
+            }
+        | not (null (paParentScaleHits an2))
+        ]
+
+      allHazards = tritoneHazards ++ ltHazards ++ parallelHazards ++ collapseHazards
+      okAmb = null allHazards && paAmbiguityScore an2 >= 50
+   in PolyStepReport
+        { psState1       = an1
+        , psState2       = an2
+        , psCommonTones  = held
+        , psHazards      = allHazards
+        , psPreservesAmb = okAmb
         }

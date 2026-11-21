@@ -128,6 +128,14 @@ main = do
           putStrLn "Error: Could not parse one or both tonal layers (e.g. B:phrygian or 11,2,6)."
           exitFailure
 
+    ["poly-step", rawA1, rawB1, rawA2, rawB2] ->
+      case (parseLayerSpec rawA1, parseLayerSpec rawB1, parseLayerSpec rawA2, parseLayerSpec rawB2) of
+        (Just a1, Just b1, Just a2, Just b2) ->
+          printPolyStepReport (evaluatePolyStep (a1, b1) (a2, b2))
+        _ -> do
+          putStrLn "Error: Could not parse one or more layer specs (e.g. B:maj F:maj Db:min G:min)."
+          exitFailure
+
     [rawA, rawB] ->
       case (parseInput rawA, parseInput rawB) of
         (Just setA, Just setB) -> printComparison setA setB
@@ -148,6 +156,7 @@ main = do
       putStrLn $ "  " ++ prog ++ " cycle <k | k1,k2> [start]       Generate basic Ck or alternating Alt(k1,k2) cycle"
       putStrLn $ "  " ++ prog ++ " cycle-fit <set>                 Find interval cycles containing <set>"
       putStrLn $ "  " ++ prog ++ " poly <layerA> <layerB>            Analyze bitonal friction & resolution traps"
+      putStrLn $ "  " ++ prog ++ " poly-step <A1> <B1> <A2> <B2>     Validate transition against accidental resolutions"
       putStrLn "Examples:"
       putStrLn $ "  " ++ prog ++ " 4-Z15"
       putStrLn $ "  " ++ prog ++ " 4-Z15 4-Z29"
@@ -472,3 +481,30 @@ printPolyAnalysis pa = do
                  (pcName thirdPc) (pcName seventhPc)
                  (pcName res3) (pcName res7))
             (paDominantTraps pa)
+
+
+printPolyStepReport :: PolyStepReport -> IO ()
+printPolyStepReport rep = do
+  let s1 = psState1 rep
+      s2 = psState2 rep
+      heldStr = if null (psCommonTones rep)
+                  then "None"
+                  else intercalate ", " (map pcName (psCommonTones rep))
+  putStrLn "=== Polytonal Progression Step Validator ==="
+  printf "State 1:        %s + %s  (Union: %s, Ambiguity: %d/100)\n"
+    (plLabel (paLayerA s1)) (plLabel (paLayerB s1))
+    (paUnionForte s1) (paAmbiguityScore s1)
+  printf "State 2:        %s + %s  (Union: %s, Ambiguity: %d/100)\n"
+    (plLabel (paLayerA s2)) (plLabel (paLayerB s2))
+    (paUnionForte s2) (paAmbiguityScore s2)
+  putStrLn $ "Held Pivots:    " ++ heldStr
+  putStrLn $ "Ambiguity Safe: " ++ if psPreservesAmb rep
+                                     then "YES — avoids resolution traps and sustains bitonality"
+                                     else "NO — resolution or tonal absorption hazard(s) detected"
+
+  if null (psHazards rep)
+    then putStrLn "\nNo anti-resolution hazards detected."
+    else do
+      putStrLn "\n--- Resolution & Absorption Hazards to Avoid ---"
+      mapM_ (\h -> printf "  [!] %-24s: %s\n" (shCategory h) (shDescription h))
+            (psHazards rep)
