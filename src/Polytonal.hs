@@ -22,6 +22,8 @@ module Polytonal
   , evaluatePolyStep
   , findBitonalPartners
   , parseModeName
+  , MultiPolyAnalysis(..)
+  , analyzeMultiPoly
   ) where
 
 import Control.Applicative ((<|>))
@@ -453,3 +455,90 @@ findBitonalPartners layA mMode =
     modeDisplayName ChordDom7         = "Dominant 7th"
     modeDisplayName ChordMaj7         = "Major 7th"
     modeDisplayName ChordMin7         = "Minor 7th"
+
+--------------------------------------------------------------------------------
+-- Multi-Layer (3+ Key) Polytonal Analysis
+--------------------------------------------------------------------------------
+
+data MultiPolyAnalysis = MultiPolyAnalysis
+  { mpLayers           :: [PolyLayer]
+  , mpUnion            :: PCSet
+  , mpUnionForte       :: String
+  , mpUnionPrime       :: PCSet
+  , mpUnionVector      :: IntervalVector
+  , mpCommonToAll      :: PCSet            -- ^ Pitch classes shared across EVERY layer simultaneously
+  , mpPairwise         :: [PolyAnalysis]   -- ^ Pairwise bitonal breakdown for every (Li, Lj) with i < j
+  , mpParentScaleHits  :: [String]         -- ^ Single 7-note tonal scales containing the entire union
+  , mpGlobalDomTraps   :: [DominantTrap]   -- ^ Embedded V7 chords spanning across the combined union
+  , mpOverallAmbiguity :: Int              -- ^ Overall multi-layer ambiguity score (0-100)
+  , mpVerdict          :: String
+  } deriving (Show, Eq)
+
+-- | Analyzes 2 or more simultaneous tonal layers for aggregate density,
+-- pairwise bitonal friction, scale collapse, and cross-layer V7 resolution traps.
+-- Returns @Nothing@ if fewer than 2 layers are provided.
+analyzeMultiPoly :: [PolyLayer] -> Maybe MultiPolyAnalysis
+analyzeMultiPoly layers
+  | length layers < 2 = Nothing
+  | otherwise =
+      let allSets = map plPitches layers
+          uSet    = makeSet (concat allSets)
+          uPf     = primeForm uSet
+          commonAll =
+            case allSets of
+              (firstSet : restSets) ->
+                [ x | x <- firstSet, all (x `elem`) restSets ]
+              _ -> mempty
+          pairs =
+            [ analyzeBitonal layI layJ
+            | (i, layI) <- zip (enumFromTo 0 (length layers - 1)) layers
+            , (j, layJ) <- zip (enumFromTo 0 (length layers - 1)) layers
+            , i < j
+            ]
+          parents = findParentTonalScales uSet
+          -- Global V7 chords present in uSet that are not already contained inside a single layer
+          globalTraps =
+            [ DominantTrap
+                { dtDomRoot     = r
+                , dtDomPitches  = domPcs
+                , dtTargetTonic = (r + 5) `mod` 12
+                , dtTritone     = ((r + 4) `mod` 12, (r + 10) `mod` 12)
+                }
+            | r <- enumFromTo 0 11
+            , let domPcs = makeSet [ r, r + 4, r + 7, r + 10 ]
+            , all (`elem` uSet) domPcs
+            , not (any (\s -> all (`elem` s) domPcs) allSets)
+            ]
+          avgPairScore = sum (map paAmbiguityScore pairs) `div` length pairs
+          densityBonus = if length uSet >= 9 && length uSet < 12 then 10 else 0
+          rawOverall   = avgPairScore + densityBonus
+                       - (if null parents then 0 else 30)
+                       - (length globalTraps * 8)
+          clamped      = max 0 (min 100 rawOverall)
+          verdict
+            | not (null parents) =
+                "Single-Key Collapse: All " ++ show (length layers)
+                ++ " layers fit inside one tonal scale ("
+                ++ intercalate ", " (take 3 parents) ++ ")."
+            | length uSet == 12 =
+                "Full Chromatic Aggregate (12/12 PCs): Total pitch saturation across "
+                ++ show (length layers) ++ " layers."
+            | clamped >= 70 && null globalTraps =
+                "Strong Polytonal Independence: Distinct layered centers with zero accidental V7 pull."
+            | clamped >= 50 =
+                "Moderate Polytonal Tension: Good layer separation, but monitor highlighted V7/pairwise overlaps."
+            | otherwise =
+                "Low Ambiguity / High Tonal Gravity: Heavy overlap or multiple cross-layer V7 pulls."
+       in Just MultiPolyAnalysis
+            { mpLayers           = layers
+            , mpUnion            = uSet
+            , mpUnionForte       = forteName uSet
+            , mpUnionPrime       = uPf
+            , mpUnionVector      = intervalVector uPf
+            , mpCommonToAll      = commonAll
+            , mpPairwise         = pairs
+            , mpParentScaleHits  = parents
+            , mpGlobalDomTraps   = globalTraps
+            , mpOverallAmbiguity = clamped
+            , mpVerdict          = verdict
+            }

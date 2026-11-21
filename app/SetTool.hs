@@ -153,6 +153,16 @@ main = do
           putStrLn $ "Error: Unknown mode or chord type '" ++ rawMode ++ "'."
           exitFailure
 
+    ("poly-multi" : rawLayers) | length rawLayers >= 3 ->
+      case traverse parseLayerSpec rawLayers of
+        Nothing -> do
+          putStrLn "Error: Could not parse one or more tonal layers (e.g. B:min F:min D:maj)."
+          exitFailure
+        Just layers ->
+          case analyzeMultiPoly layers of
+            Nothing -> exitFailure
+            Just mpa -> printMultiPolyAnalysis mpa
+
     [rawA, rawB] ->
       case (parseInput rawA, parseInput rawB) of
         (Just setA, Just setB) -> printComparison setA setB
@@ -175,6 +185,7 @@ main = do
       putStrLn $ "  " ++ prog ++ " poly <layerA> <layerB>            Analyze bitonal friction & resolution traps"
       putStrLn $ "  " ++ prog ++ " poly-step <A1> <B1> <A2> <B2>     Validate transition against accidental resolutions"
       putStrLn $ "  " ++ prog ++ " poly-partners <layerA> [mode]     Rank highest-ambiguity bitonal partners"
+      putStrLn $ "  " ++ prog ++ " poly-multi <L1> <L2> <L3> [...]   Analyze 3+ simultaneous tonal layers"
       putStrLn "Examples:"
       putStrLn $ "  " ++ prog ++ " 4-Z15"
       putStrLn $ "  " ++ prog ++ " 4-Z15 4-Z29"
@@ -549,3 +560,57 @@ printBitonalPartners layA mMode = do
              scaleFlag
              trapFlag)
         ranked
+
+printMultiPolyAnalysis :: MultiPolyAnalysis -> IO ()
+printMultiPolyAnalysis mpa = do
+  let layers = mpLayers mpa
+      commonStr = if null (mpCommonToAll mpa)
+                    then "None"
+                    else intercalate ", " (map pcName (mpCommonToAll mpa))
+  printf "=== Multi-Layer Polytonal Analysis (%d Layers) ===\n" (length layers)
+  mapM_ (\(idx, lay) ->
+           printf "  Layer %d: %-20s %s\n" idx (plLabel lay) (formatSet (plPitches lay)))
+        (zip (enumFromTo 1 (length layers)) layers)
+  putStrLn ""
+  printf "Combined Union:    %s (Cardinality: %d/12)\n"
+    (formatSet (mpUnion mpa)) (length (mpUnion mpa))
+  printf "Union Set Class:   Forte %-8s (%s)  %s\n"
+    (mpUnionForte mpa)
+    (intercalate "," (map show (mpUnionPrime mpa)))
+    (formatVector (mpUnionVector mpa))
+  putStrLn $ "Universal Pivots:  " ++ commonStr
+  printf "Overall Ambiguity: %d / 100\n" (mpOverallAmbiguity mpa)
+  putStrLn $ "Assessment:        " ++ mpVerdict mpa
+
+  putStrLn "\n--- Pairwise Layer Breakdown ---"
+  mapM_ (\pa ->
+           printf "  %-18s vs %-18s -> Score: %3d | ic1:%-2d ic6:%-2d | V7 traps: %d\n"
+             (plLabel (paLayerA pa))
+             (plLabel (paLayerB pa))
+             (paAmbiguityScore pa)
+             (length (paCrossHalfSteps pa))
+             (length (paCrossTritones pa))
+             (length (paDominantTraps pa)))
+        (mpPairwise mpa)
+
+  putStrLn "\n--- Global Anti-Resolution & Scale-Collapse Warnings ---"
+  if null (mpParentScaleHits mpa)
+    then putStrLn "Parent Scale Fit:  None (avoids single-scale absorption)"
+    else putStrLn $ "Parent Scale Fit:  WARNING — all layers fit inside "
+                 ++ intercalate ", " (mpParentScaleHits mpa)
+
+  if null (mpGlobalDomTraps mpa)
+    then putStrLn "Cross-Layer V7s:   None detected across combined union"
+    else do
+      putStrLn "Cross-Layer V7s:   WARNING — combined union forms embedded dominant 7ths:"
+      mapM_ (\dt -> do
+               let (thirdPc, seventhPc) = dtTritone dt
+                   res3 = (thirdPc + 1) `mod` 12
+                   res7 = (seventhPc - 1) `mod` 12
+               printf "  * %s7 (%s) pulls toward Tonic %s (avoid resolving tritone %s-%s -> %s-%s)\n"
+                 (pcName (dtDomRoot dt))
+                 (intercalate "," (map pcName (dtDomPitches dt)))
+                 (pcName (dtTargetTonic dt))
+                 (pcName thirdPc) (pcName seventhPc)
+                 (pcName res3) (pcName res7))
+            (mpGlobalDomTraps mpa)
