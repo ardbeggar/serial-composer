@@ -1,2 +1,8 @@
 *~
-dist-newstyle
+dist-newstyle/
+.ghc.environment.*
+*.musicxml
+*.ly
+*.pdf
+*.midi
+*.mid

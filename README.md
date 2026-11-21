@@ -1,5 +1,7 @@
 # SerialComposer
 
+[![Haskell CI](https://github.com/ardbeggar/serial-composer/actions/workflows/ci.yml/badge.svg)](https://github.com/ardbeggar/serial-composer/actions/workflows/ci.yml)
+
 `SerialComposer` is a pure Haskell library suite and set of command-line tools (`serial-compose` and `set-tool`) for **N × N serial matrix generation**, **derived and all-interval row construction**, **Stravinsky rotational arrays**, **Allen Forte & John Rahn pitch-class set theory analysis**, **interval cycles**, **2-layer and multi-layer polytonal ambiguity & anti-resolution analysis**, and **MusicXML / LilyPond score export**.
 
 See [docs/THEORY_AND_USAGE.md](docs/THEORY_AND_USAGE.md) for mathematical definitions and combined composition workflows.
@@ -238,3 +240,8 @@ mscore doom_b.musicxml
 lilypond doom_b.ly
 # Generates doom_b.pdf and doom_b.midi
 ```
+---
+
+## Acknowledgments
+
+Designed and directed by Oleg Belozerov, with implementation, documentation, and test generation developed in collaboration with Google's AI assistant (Gemini).

@@ -1,14 +1,27 @@
 cabal-version:      3.0
 name:               serial-composer
 version:            0.1.0.0
-synopsis:           Atonal and serial matrix generator with MusicXML and LilyPond export
-license:            MIT
-author:             Composer
-maintainer:         composer@example.com
+synopsis:           Serial matrix generator, pitch-class set theory suite, and polytonal analyzer
+description:
+    A pure Haskell library and CLI suite (serial-compose and set-tool) for
+    N x N serial matrix generation, derived and all-interval rows, Stravinsky
+    rotational arrays, Allen Forte and John Rahn pitch-class set theory,
+    interval cycles, polytonal ambiguity analysis, and MusicXML/LilyPond export.
+license:            BSD-3-Clause
+license-file:       LICENSE
+author:             Oleg Belozerov
+maintainer:         ardbeggar@yandex.ru
+category:           Sound, Music
 build-type:         Simple
+extra-doc-files:    README.md,
+                    docs/THEORY_AND_USAGE.md
+
+source-repository head
+    type:     git
+    location: https://github.com/ardbeggar/serial-composer.git
 
 common warnings
-    ghc-options: -Wall
+    ghc-options: -Wall -Wx-partial
 
 library
     import:           warnings
@@ -35,4 +48,14 @@ executable set-tool
     build-depends:    base >= 4.16 && < 5,
                       serial-composer
     hs-source-dirs:   app
+    default-language: Haskell2010
+
+test-suite serial-composer-test
+    import:           warnings
+    type:             exitcode-stdio-1.0
+    main-is:          Spec.hs
+    build-depends:    base >= 4.16 && < 5,
+                      random >= 1.2,
+                      serial-composer
+    hs-source-dirs:   test
     default-language: Haskell2010
