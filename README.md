@@ -1,6 +1,6 @@
 # SerialComposer
 
-`SerialComposer` is a pure Haskell library suite and set of command-line tools (`serial-compose` and `set-tool`) for **N × N serial matrix generation**, **derived and all-interval row construction**, **Stravinsky rotational arrays**, **Allen Forte & John Rahn pitch-class set theory analysis**, **interval cycles**, **polytonal ambiguity & anti-resolution analysis**, and **MusicXML / LilyPond score export**.
+`SerialComposer` is a pure Haskell library suite and set of command-line tools (`serial-compose` and `set-tool`) for **N × N serial matrix generation**, **derived and all-interval row construction**, **Stravinsky rotational arrays**, **Allen Forte & John Rahn pitch-class set theory analysis**, **interval cycles**, **2-layer and multi-layer polytonal ambiguity & anti-resolution analysis**, and **MusicXML / LilyPond score export**.
 
 See [docs/THEORY_AND_USAGE.md](docs/THEORY_AND_USAGE.md) for mathematical definitions and combined composition workflows.
 
@@ -20,7 +20,7 @@ serial-composer/
 └── src/
     ├── SerialComposer.hs (N x N matrix, invariance, rotational arrays, M5/M7, score export)
     ├── PitchClassSet.hs  (Forte/Rahn prime forms, catalog, K/Kh, combinatoriality, cycles)
-    └── Polytonal.hs      (Bitonal friction, V7 resolution traps, step validator, partner ranker)
+    └── Polytonal.hs      (2-layer & 3+ layer bitonal/polytonal friction, V7 traps, partner ranker)
 ```
 
 ---
@@ -106,7 +106,7 @@ cabal run serial-compose -- -w "0,1,6,7,10" -r D --m5 --rotate --analyze
 
 ## 3. Pitch-Class Set Theory & Polytonality Tool (`set-tool`)
 
-`set-tool` combines Allen Forte's *The Structure of Atonal Music*, John Rahn's prime form algorithm, George Perle's interval cycles, and polytonal/bitonal anti-resolution analysis.
+`set-tool` combines Allen Forte's *The Structure of Atonal Music*, John Rahn's prime form algorithm, George Perle's interval cycles, and 2-layer / multi-layer polytonal anti-resolution analysis.
 
 ### Set-Theory Commands (`PitchClassSet`)
 
@@ -132,6 +132,8 @@ Layer arguments accept either `Root:mode` syntax (e.g., `B:phrygian`, `F:minor`,
 | `set-tool poly <layerA> <layerB>` | Analyze two superimposed tonal layers for ambiguity score, cross-layer `ic1`/`ic6` friction, single-scale absorption, and accidental `V7` (`4-27`) resolution traps |
 | `set-tool poly-step <A1> <B1> <A2> <B2>` | Validate a two-chord bitonal transition against contrary-motion tritone resolutions, leading-tone cadences, parallel root locking, and single-triad/scale collapse |
 | `set-tool poly-partners <layerA> [mode]` | Search all 12 transpositions of candidate scales or triads against `<layerA>`, ranked by highest bitonal independence and zero resolution traps |
+| `set-tool poly-multi <L1> <L2> <L3> ...` | Analyze 3 or more simultaneous tonal layers for aggregate saturation, universal pivots, pairwise layer breakdown, and global cross-layer `V7` traps |
+| `set-tool poly-multi-partners <L1> <L2> [mode]` | Rank the best non-resolving 3rd tonal layer to add on top of an existing two-layer foundation `<L1> + <L2>` |
 
 ### Examples
 
@@ -168,13 +170,14 @@ cabal run set-tool -- cycle 1,3 0
 cabal run set-tool -- cycle-fit 0,1,6,7
 ```
 
-**Analyze polytonal layers, validate progressions, and find non-resolving bitonal partners:**
+**Analyze 2-layer and 3+ layer polytonality, validate steps, and find non-resolving partners:**
 
 ```bash
 cabal run set-tool -- poly B:phrygian F:minor
 cabal run set-tool -- poly-step B:maj F:maj D:min Ab:min
 cabal run set-tool -- poly-partners B:min min
-cabal run set-tool -- poly-partners D:minor
+cabal run set-tool -- poly-multi B:min F:min D:maj
+cabal run set-tool -- poly-multi-partners B:min F:min maj
 ```
 
 ---
@@ -207,11 +210,11 @@ import PitchClassSet
 import Polytonal
 import System.Random (mkStdGen)
 
--- Analyze bitonal friction and accidental V7 traps between B Phrygian and F Minor
-let Just layA = parseLayerSpec "B:phrygian"
-let Just layB = parseLayerSpec "F:minor"
-paAmbiguityScore (analyzeBitonal layA layB)
-paDominantTraps (analyzeBitonal layA layB)
+-- Analyze 3-layer polytonal independence (e.g., Guitar + Bass + Synth)
+let Just l1 = parseLayerSpec "B:min"
+let Just l2 = parseLayerSpec "F:min"
+let Just l3 = parseLayerSpec "D:maj"
+fmap mpOverallAmbiguity (analyzeMultiPoly [l1, l2, l3])
 
 -- Generate a derived 12-tone row, scan 4N invariance, and print its rotational array
 let (Just dRow, _) = deriveRow12 (mkStdGen 42)

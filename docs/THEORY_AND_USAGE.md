@@ -64,6 +64,7 @@ When writing polytonal or bitonal music, sustaining ambiguity requires avoiding 
 - **Cross-Layer Friction (`ic1` and `ic6`):** Minor-second clashes (`ic1`, e.g. `D` in Layer A against `D#` in Layer B) and cross-layer tritones (`ic6`) anchor two distinct tonal centers simultaneously.
 - **Accidental Dominant-7th (`4-27`) Traps:** If combining notes from Layer A and Layer B forms `[r, r+4, r+7, r+10]`, its tritone (`r+4` and `r+10`) creates strong tonal gravity toward `(r + 5) mod 12`. `Polytonal` detects these embedded `V7` chords and warns you which target tonic to avoid resolving into.
 - **Progression Anti-Resolution Hazards (`poly-step`):** Flags transitions `(A1, B1) -> (A2, B2)` where a tritone discharges by contrary half-step motion, a leading tone resolves `+1` into a target root, both layer roots lock into parallel fifths/octaves, or State 2 collapses into a single consonant triad (`3-11`).
+- **Multi-Layer Polytonality (`poly-multi` & `poly-multi-partners`):** Evaluates 3 or more simultaneous tonal layers (e.g., Guitar, Bass, and Synth) to detect pairwise weak links, avoid undifferentiated `12/12` chromatic saturation, and rank non-resolving 3rd-layer additions.
 
 ---
 
@@ -79,15 +80,16 @@ Given an `N`-note row, generates all `N` cyclic rotations and transposes each ro
 
 ## 4. Combined Composition Workflows
 
-### Workflow A: Designing a Non-Resolving Bitonal Progression
+### Workflow A: Designing a Non-Resolving Bitonal & Polytonal Progression
 1. **Find high-ambiguity bitonal partners for a base scale or chord** (e.g., `B Phrygian` or `B Minor triad`):
    ```bash
    cabal run set-tool -- poly-partners B:phrygian
    cabal run set-tool -- poly-partners B:min min
    ```
-2. **Inspect a chosen pair for shared pivot tones, half-step clashes, and accidental `V7` traps:**
+2. **Add a 3rd independent tonal layer (e.g., for Synth pad over Guitar + Bass) without triggering V7 gravity:**
    ```bash
-   cabal run set-tool -- poly B:phrygian F:minor
+   cabal run set-tool -- poly-multi-partners B:min F:min maj
+   cabal run set-tool -- poly-multi B:min F:min D:maj
    ```
 3. **Validate transitions between polychords so you never trigger an unintended cadence:**
    ```bash
