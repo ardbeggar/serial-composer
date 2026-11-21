@@ -1,6 +1,6 @@
 # SerialComposer
 
-`SerialComposer` is a pure Haskell library suite and set of command-line tools (`serial-compose` and `set-tool`) for **N × N serial matrix generation**, **derived and all-interval row construction**, **Stravinsky rotational arrays**, **Allen Forte & John Rahn pitch-class set theory analysis**, **interval cycles**, and **MusicXML / LilyPond score export**.
+`SerialComposer` is a pure Haskell library suite and set of command-line tools (`serial-compose` and `set-tool`) for **N × N serial matrix generation**, **derived and all-interval row construction**, **Stravinsky rotational arrays**, **Allen Forte & John Rahn pitch-class set theory analysis**, **interval cycles**, **polytonal ambiguity & anti-resolution analysis**, and **MusicXML / LilyPond score export**.
 
 See [docs/THEORY_AND_USAGE.md](docs/THEORY_AND_USAGE.md) for mathematical definitions and combined composition workflows.
 
@@ -19,7 +19,8 @@ serial-composer/
 │   └── SetTool.hs        (set-tool CLI)
 └── src/
     ├── SerialComposer.hs (N x N matrix, invariance, rotational arrays, M5/M7, score export)
-    └── PitchClassSet.hs  (Forte/Rahn prime forms, catalog, K/Kh, combinatoriality, cycles)
+    ├── PitchClassSet.hs  (Forte/Rahn prime forms, catalog, K/Kh, combinatoriality, cycles)
+    └── Polytonal.hs      (Bitonal friction, V7 resolution traps, step validator, partner ranker)
 ```
 
 ---
@@ -103,11 +104,11 @@ cabal run serial-compose -- -w "0,1,6,7,10" -r D --m5 --rotate --analyze
 
 ---
 
-## 3. Pitch-Class Set Theory Tool (`set-tool`)
+## 3. Pitch-Class Set Theory & Polytonality Tool (`set-tool`)
 
-`set-tool` implements Allen Forte's *The Structure of Atonal Music*, John Rahn's prime form algorithm, and George Perle's interval cycles—including the complete 208-class Forte catalog (`3-1` through `9-12`), Normal Order & Prime Form (showing both Forte and Rahn whenever they diverge), Interval-Class Vectors, Z-relations, similarity relations (`R1`, `R2`, `Rp`), `M5`/`M7` transforms, abstract superset/subset searches, `K`/`Kh` set-complexes, nexus set discovery, hexachordal combinatoriality, exact `Tn`/`TnI` mapping solvers, minimal voice-leading distance, and interval cycles.
+`set-tool` combines Allen Forte's *The Structure of Atonal Music*, John Rahn's prime form algorithm, George Perle's interval cycles, and polytonal/bitonal anti-resolution analysis.
 
-### Commands
+### Set-Theory Commands (`PitchClassSet`)
 
 | Command | Description |
 | :--- | :--- |
@@ -122,6 +123,16 @@ cabal run serial-compose -- -w "0,1,6,7,10" -r D --m5 --rotate --analyze
 | `set-tool cycle <k \| k1,k2> [start]` | Generate a basic `Ck` cycle (with all 12-tone cosets) or an alternating `Alt(k1,k2)` cycle |
 | `set-tool cycle-fit <set>` | Find all basic and alternating interval cycles containing `<set>` (marking `[CONTIGUOUS]` vs `[SUBSET]`) |
 
+### Polytonality & Anti-Resolution Commands (`Polytonal`)
+
+Layer arguments accept either `Root:mode` syntax (e.g., `B:phrygian`, `F:minor`, `D:lydian`, `B:min`, `F:maj`, `G:dom7`, `C:dim`, `E:aug`, `A:min7`, `Bb:maj7`) or raw pitch-class lists (`11,2,6` or `B,D,F#`).
+
+| Command | Description |
+| :--- | :--- |
+| `set-tool poly <layerA> <layerB>` | Analyze two superimposed tonal layers for ambiguity score, cross-layer `ic1`/`ic6` friction, single-scale absorption, and accidental `V7` (`4-27`) resolution traps |
+| `set-tool poly-step <A1> <B1> <A2> <B2>` | Validate a two-chord bitonal transition against contrary-motion tritone resolutions, leading-tone cadences, parallel root locking, and single-triad/scale collapse |
+| `set-tool poly-partners <layerA> [mode]` | Search all 12 transpositions of candidate scales or triads against `<layerA>`, ranked by highest bitonal independence and zero resolution traps |
+
 ### Examples
 
 **Analyze a set (including Forte vs. Rahn prime form comparison on diverging sets like `5-20`):**
@@ -132,46 +143,38 @@ cabal run set-tool -- 5-20
 cabal run set-tool -- C,Db,Gb,G,Bb
 ```
 
-**Find minimal voice-leading distance from `4-9` (`0,1,6,7`) to any `Tn`/`TnI` form of `4-Z15`:**
+**Find minimal voice-leading distance, exact `Tn`/`TnI` mappings, and Z-mates:**
 
 ```bash
 cabal run set-tool -- voicelead 0,1,6,7 4-Z15
-```
-
-**Solve exact `Tn`/`TnI` mappings or compare Z-mates and similarity:**
-
-```bash
 cabal run set-tool -- 0,1,6,7 2,3,8,9
 cabal run set-tool -- 4-Z15 4-Z29
 ```
 
-**Search the Forte catalog for supersets or subsets:**
+**Search supersets, subsets, `K`/`Kh` complexes, nexus sets, and combinatoriality:**
 
 ```bash
 cabal run set-tool -- supersets 3-5 5
-cabal run set-tool -- subsets 5-19 4
-```
-
-**Inspect Set-Complex `K`/`Kh` and find Nexus Sets across multiple harmonic cells:**
-
-```bash
 cabal run set-tool -- complex 4-Z15
 cabal run set-tool -- nexus 3-5 4-Z15 5-19
-```
-
-**Analyze hexachordal combinatoriality:**
-
-```bash
 cabal run set-tool -- comb 6-7
-cabal run set-tool -- comb 0,1,3,4,6,7
 ```
 
-**Generate basic/alternating interval cycles and test cycle alignment:**
+**Generate interval cycles and test cycle alignment:**
 
 ```bash
 cabal run set-tool -- cycle 3 B
 cabal run set-tool -- cycle 1,3 0
 cabal run set-tool -- cycle-fit 0,1,6,7
+```
+
+**Analyze polytonal layers, validate progressions, and find non-resolving bitonal partners:**
+
+```bash
+cabal run set-tool -- poly B:phrygian F:minor
+cabal run set-tool -- poly-step B:maj F:maj D:min Ab:min
+cabal run set-tool -- poly-partners B:min min
+cabal run set-tool -- poly-partners D:minor
 ```
 
 ---
@@ -192,7 +195,7 @@ When using `serial-compose --root` (without `--octave`), octaves are selected au
 
 ## 5. Using the Libraries in GHCi
 
-Launch an interactive session with both `SerialComposer` and `PitchClassSet` loaded:
+Launch an interactive session with `SerialComposer`, `PitchClassSet`, and `Polytonal` loaded:
 
 ```bash
 cabal repl
@@ -201,19 +204,19 @@ cabal repl
 ```haskell
 import SerialComposer
 import PitchClassSet
+import Polytonal
 import System.Random (mkStdGen)
 
--- Compare Forte vs. Rahn prime forms and inspect interval cycles
-let s = makeSet [0, 1, 5, 6, 8]
-primeForm s                 -- [0,1,3,7,8] (Forte 5-20)
-rahnPrimeForm s             -- [0,1,5,6,8] (Rahn)
-alternatingCycle (1, 3) 0   -- [0,1,4,5,8,9] (Hexatonic 6-20)
+-- Analyze bitonal friction and accidental V7 traps between B Phrygian and F Minor
+let Just layA = parseLayerSpec "B:phrygian"
+let Just layB = parseLayerSpec "F:minor"
+paAmbiguityScore (analyzeBitonal layA layB)
+paDominantTraps (analyzeBitonal layA layB)
 
 -- Generate a derived 12-tone row, scan 4N invariance, and print its rotational array
-let (Just dRow, _) = deriveRow12 [0, 1, 6] (mkStdGen 42)
+let (Just dRow, _) = deriveRow12 (mkStdGen 42)
 printRowSegmentation 11 dRow
 printRowInvariance 12 11 dRow
-printRotationalArray 12 11 [0, 1, 6, 7, 10]
 ```
 
 ---

@@ -1,6 +1,6 @@
 # Theory & Workflow Guide
 
-This guide explains the set-theory concepts implemented in `PitchClassSet` and `SerialComposer`, along with practical workflows combining `set-tool` and `serial-compose`.
+This guide explains the set-theory and polytonal concepts implemented in `PitchClassSet`, `Polytonal`, and `SerialComposer`, along with practical composition workflows.
 
 ---
 
@@ -57,22 +57,44 @@ Given a concrete pitch-class set `A` and a target set class `B` of equal cardina
 
 ---
 
-## 2. Serial Matrix & Rotational Techniques (`SerialComposer`)
+## 2. Polytonality & Anti-Resolution Mechanics (`Polytonal`)
+
+When writing polytonal or bitonal music, sustaining ambiguity requires avoiding accidental tonal absorption or cadential discharge:
+- **Single-Scale Collapse:** If the combined union `A ∪ B` fits inside a single 7-note diatonic (`7-35`), melodic minor (`7-34`), or harmonic minor (`7-32`) scale, the ear hears upper extensions of a single key rather than two independent tonal planes.
+- **Cross-Layer Friction (`ic1` and `ic6`):** Minor-second clashes (`ic1`, e.g. `D` in Layer A against `D#` in Layer B) and cross-layer tritones (`ic6`) anchor two distinct tonal centers simultaneously.
+- **Accidental Dominant-7th (`4-27`) Traps:** If combining notes from Layer A and Layer B forms `[r, r+4, r+7, r+10]`, its tritone (`r+4` and `r+10`) creates strong tonal gravity toward `(r + 5) mod 12`. `Polytonal` detects these embedded `V7` chords and warns you which target tonic to avoid resolving into.
+- **Progression Anti-Resolution Hazards (`poly-step`):** Flags transitions `(A1, B1) -> (A2, B2)` where a tritone discharges by contrary half-step motion, a leading tone resolves `+1` into a target root, both layer roots lock into parallel fifths/octaves, or State 2 collapses into a single consonant triad (`3-11`).
+
+---
+
+## 3. Serial Matrix & Rotational Techniques (`SerialComposer`)
 
 ### 4N Row-Invariance Scanner (`--invariance`)
-Scans all `4N` forms (`P`, `R`, `I`, `RI`) of a matrix against `P0` to find:
-- Transformations preserving the exact unordered pitch-class set (when `N < 12`).
-- Transformations preserving discrete `k`-note partitions (trichords, tetrachords, hexachords) either in exact slot order or permuted across slots.
-- Transformations locking pitches into identical ordinal positions.
+Scans all `4N` forms (`P`, `R`, `I`, `RI`) of a matrix against `P0` to find transformations preserving the unordered pitch-class set (when `N < 12`), preserving discrete `k`-note partitions (trichords, tetrachords, hexachords), or locking pitches into identical ordinal positions.
 
 ### Stravinsky Rotational Arrays (`--rotate`)
 Given an `N`-note row, generates all `N` cyclic rotations and transposes each rotation so its first pitch class matches the initial pitch of `P0` (alpha-transposition). Reading down columns `1 .. N-1` yields `N - 1` vertical chords, each analyzed with its Forte set-class name and interval vector.
 
 ---
 
-## 3. Combined Composition Workflows
+## 4. Combined Composition Workflows
 
-### Workflow A: Building & Transforming a Derived 12-Tone Row
+### Workflow A: Designing a Non-Resolving Bitonal Progression
+1. **Find high-ambiguity bitonal partners for a base scale or chord** (e.g., `B Phrygian` or `B Minor triad`):
+   ```bash
+   cabal run set-tool -- poly-partners B:phrygian
+   cabal run set-tool -- poly-partners B:min min
+   ```
+2. **Inspect a chosen pair for shared pivot tones, half-step clashes, and accidental `V7` traps:**
+   ```bash
+   cabal run set-tool -- poly B:phrygian F:minor
+   ```
+3. **Validate transitions between polychords so you never trigger an unintended cadence:**
+   ```bash
+   cabal run set-tool -- poly-step B:maj F:maj D:min Ab:min
+   ```
+
+### Workflow B: Building & Transforming a Derived 12-Tone Row
 1. **Pick a core trichord or tetrachord** (e.g., `3-5` `(0,1,6)` — minor second + tritone).
 2. **Generate a 12-tone derived row, inspect its segments, and scan all 48 matrix forms for segment-preserving counter-rows:**
    ```bash
@@ -83,23 +105,16 @@ Given an `N`-note row, generates all `N` cyclic rotations and transposes each ro
    cabal run serial-compose -- --derive 0,1,6 -r B --seed 42 --m5 --analyze --plain -f derived_m5
    ```
 
-### Workflow B: Generating Harmony from a Short Row via Rotational Arrays & Interval Cycles
-1. **Start with a 5- or 6-note row** (e.g., `[0,1,6,7,10]` in Drop B).
-2. **Generate the Stravinsky rotational array and inspect its vertical column chords:**
+### Workflow C: Rotational Arrays, Interval Cycles & Parsimonious Voice-Leading
+1. **Generate a Stravinsky rotational array and inspect its vertical column chords:**
    ```bash
    cabal run serial-compose -- -w "0,1,6,7,10" -r B --rotate --invariance
    ```
-3. **Discover underlying symmetrical scales that embed your row or chords:**
+2. **Check which symmetrical interval cycles embed your row or chords:**
    ```bash
    cabal run set-tool -- cycle-fit 0,1,6,7,10
    ```
-
-### Workflow C: Parsimonious Voice-Leading & Nexus Set Bridging
-1. **Find the smoothest voice-leading from one chord to another set class:**
+3. **Find the smoothest voice-leading from one chord to another set class:**
    ```bash
    cabal run set-tool -- voicelead 0,1,6,7 4-Z15
-   ```
-2. **Find a `Kh` nexus hexachord that unifies multiple cells across sections:**
-   ```bash
-   cabal run set-tool -- nexus 3-5 4-Z15 5-19
    ```
