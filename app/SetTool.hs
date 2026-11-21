@@ -136,6 +136,23 @@ main = do
           putStrLn "Error: Could not parse one or more layer specs (e.g. B:maj F:maj Db:min G:min)."
           exitFailure
 
+    ["poly-partners", rawA] ->
+      case parseLayerSpec rawA of
+        Just layA -> printBitonalPartners layA Nothing
+        Nothing -> do
+          putStrLn $ "Error: Could not parse tonal layer '" ++ rawA ++ "'."
+          exitFailure
+
+    ["poly-partners", rawA, rawMode] ->
+      case (parseLayerSpec rawA, parseModeName rawMode) of
+        (Just layA, Just (_, mode)) -> printBitonalPartners layA (Just mode)
+        (Nothing, _) -> do
+          putStrLn $ "Error: Could not parse tonal layer '" ++ rawA ++ "'."
+          exitFailure
+        (_, Nothing) -> do
+          putStrLn $ "Error: Unknown mode or chord type '" ++ rawMode ++ "'."
+          exitFailure
+
     [rawA, rawB] ->
       case (parseInput rawA, parseInput rawB) of
         (Just setA, Just setB) -> printComparison setA setB
@@ -157,6 +174,7 @@ main = do
       putStrLn $ "  " ++ prog ++ " cycle-fit <set>                 Find interval cycles containing <set>"
       putStrLn $ "  " ++ prog ++ " poly <layerA> <layerB>            Analyze bitonal friction & resolution traps"
       putStrLn $ "  " ++ prog ++ " poly-step <A1> <B1> <A2> <B2>     Validate transition against accidental resolutions"
+      putStrLn $ "  " ++ prog ++ " poly-partners <layerA> [mode]     Rank highest-ambiguity bitonal partners"
       putStrLn "Examples:"
       putStrLn $ "  " ++ prog ++ " 4-Z15"
       putStrLn $ "  " ++ prog ++ " 4-Z15 4-Z29"
@@ -508,3 +526,26 @@ printPolyStepReport rep = do
       putStrLn "\n--- Resolution & Absorption Hazards to Avoid ---"
       mapM_ (\h -> printf "  [!] %-24s: %s\n" (shCategory h) (shDescription h))
             (psHazards rep)
+
+printBitonalPartners :: PolyLayer -> Maybe ScaleMode -> IO ()
+printBitonalPartners layA mMode = do
+  let ranked = take 12 (findBitonalPartners layA mMode)
+  printf "=== Top Non-Resolving Bitonal Partners for %s %s ===\n\n"
+    (plLabel layA) (formatSet (plPitches layA))
+  mapM_ (\pa -> do
+           let layB = paLayerB pa
+               trapFlag = if null (paDominantTraps pa)
+                            then "0 V7 traps"
+                            else show (length (paDominantTraps pa)) ++ " V7 trap(s)"
+               scaleFlag = if null (paParentScaleHits pa)
+                             then "No scale collapse"
+                             else "Collapses to 1 scale"
+           printf "  [Score: %3d]  %-20s -> Union %-8s | ic1:%-2d ic6:%-2d | %-17s | %s\n"
+             (paAmbiguityScore pa)
+             (plLabel layB)
+             (paUnionForte pa)
+             (length (paCrossHalfSteps pa))
+             (length (paCrossTritones pa))
+             scaleFlag
+             trapFlag)
+        ranked

@@ -20,11 +20,15 @@ module Polytonal
   , StepHazard(..)
   , PolyStepReport(..)
   , evaluatePolyStep
+  , findBitonalPartners
+  , parseModeName
   ) where
 
 import Control.Applicative ((<|>))
 import Data.Char (isSpace, toLower, toUpper)
-import Data.List (elemIndex, intercalate, nub)
+import Data.List (elemIndex, intercalate, nub, sortBy)
+import Data.Ord (Down(..), comparing)
+
 import PitchClassSet
   ( IntervalVector
   , PCSet
@@ -397,3 +401,55 @@ evaluatePolyStep (a1, b1) (a2, b2) =
         , psHazards      = allHazards
         , psPreservesAmb = okAmb
         }
+
+--------------------------------------------------------------------------------
+-- Non-Resolving Bitonal Partner Finder
+--------------------------------------------------------------------------------
+
+-- | Searches all 12 root transpositions of the requested candidate mode(s)
+-- against @layA@, returning analyses sorted by descending ambiguity score
+-- (prioritizing zero accidental V7 traps and no single-scale absorption).
+findBitonalPartners :: PolyLayer -> Maybe ScaleMode -> [PolyAnalysis]
+findBitonalPartners layA mMode =
+  let candidateModes =
+        case mMode of
+          Just m  -> [(modeDisplayName m, m)]
+          Nothing ->
+            [ ("Major Triad",      ChordMajorTriad)
+            , ("Minor Triad",      ChordMinorTriad)
+            , ("Natural Minor",    ModeNaturalMinor)
+            , ("Phrygian",         ModePhrygian)
+            , ("Lydian",           ModeLydian)
+            , ("Locrian",          ModeLocrian)
+            ]
+      allCandidates =
+        [ analyzeBitonal layA (buildLayer (pcName r ++ " " ++ mLbl) r mode)
+        | (mLbl, mode) <- candidateModes
+        , r <- enumFromTo 0 11
+        , let candPcs = makeSet [ (r + iv) `mod` 12 | iv <- modeIntervals mode ]
+        , candPcs /= plPitches layA
+        ]
+      -- Sort by: (1) no single-scale collapse, (2) zero V7 traps, (3) highest ambiguity score
+      rankKey pa =
+        ( null (paParentScaleHits pa)
+        , null (paDominantTraps pa)
+        , paAmbiguityScore pa
+        )
+   in sortBy (comparing (Down . rankKey)) allCandidates
+  where
+    modeDisplayName ModeMajor         = "Major"
+    modeDisplayName ModeNaturalMinor  = "Natural Minor"
+    modeDisplayName ModeHarmonicMinor = "Harmonic Minor"
+    modeDisplayName ModeMelodicMinor  = "Melodic Minor"
+    modeDisplayName ModeDorian        = "Dorian"
+    modeDisplayName ModePhrygian      = "Phrygian"
+    modeDisplayName ModeLydian        = "Lydian"
+    modeDisplayName ModeMixolydian    = "Mixolydian"
+    modeDisplayName ModeLocrian       = "Locrian"
+    modeDisplayName ChordMajorTriad   = "Major Triad"
+    modeDisplayName ChordMinorTriad   = "Minor Triad"
+    modeDisplayName ChordDimTriad     = "Diminished Triad"
+    modeDisplayName ChordAugTriad     = "Augmented Triad"
+    modeDisplayName ChordDom7         = "Dominant 7th"
+    modeDisplayName ChordMaj7         = "Major 7th"
+    modeDisplayName ChordMin7         = "Minor 7th"
