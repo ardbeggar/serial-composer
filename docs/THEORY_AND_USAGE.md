@@ -36,6 +36,11 @@ Counts the total occurrences of all six interval classes (unordered pitch-class 
 - **`R2` (Strong Similarity):** Two sets share 4 identical Interval Vector entries, while the remaining 2 entries differ without swapping.
 - **`Rp` (Pitch-Class Similarity):** Two sets of cardinality `N` share at least one common abstract subset of cardinality `N - 1`.
 
+### David Lewin's Interval Function (`IFUNC(X, Y)` & `IFUNC_I(X, Y)`)
+- **`IFUNC(X, Y)(n)`:** Counts all ordered pairs `(x ∈ X, y ∈ Y)` such that `(y - x) mod 12 == n` for `n = 0..11`.
+- **Lewin's Common-Tone Theorem:** `IFUNC(X, Y)(n)` equals `|Tn(X) ∩ Y|`, the exact number of common tones retained when set `X` is transposed by `n` semitones onto set `Y`. Similarly, `IFUNC_I(X, Y)(n)` equals `|TnI(X) ∩ Y|`.
+- The sum of all 12 entries in `IFUNC(X, Y)` always equals `|X| × |Y|`.
+
 ### Set-Complexes `K` and `Kh`
 For any reference set class `T` (cardinality 3–9) and its complement `T-bar`:
 - **Set-Complex `K(T, T-bar)`:** Contains every set class `S` (other than `T` and `T-bar`) that is in an abstract subset/superset relation with **`T` OR `T-bar`**.
@@ -90,7 +95,14 @@ Given an `N`-note row, generates all `N` cyclic rotations and transposes each ro
 
 ## 5. Combined Composition Workflows
 
-### Workflow A: Bridging Atonal Cells into Neotonal Harmony
+### Workflow A: Connecting Two Different Chords or Sections via Lewin's `IFUNC`
+1. **Profile all 12 transpositions and inversions between Section A's set `X` and Section B's set `Y`:**
+   ```bash
+   cabal run set-tool -- ifunc 0,1,6,7 0,1,4,6
+   ```
+2. Choose a `Tn` or `TnI` level with maximum common tones (`Max Common Tones`) for smooth pivot voice-leading, or `Zero Overlap` for an abrupt textural break.
+
+### Workflow B: Bridging Atonal Cells into Neotonal Harmony
 1. **Take an atonal harmonic cell from your row or rotational array** (e.g., `0,1,4,6,7`).
 2. **Inspect embedded triads/sevenths, completing extensions, and 1-semitone voice-leading neighbors:**
    ```bash
@@ -98,7 +110,7 @@ Given an `N`-note row, generates all `N` cyclic rotations and transposes each ro
    ```
 3. Use a 1-semitone neighbor chord to pivot smoothly from a dense atonal riff into an open neotonal cadence—or vice versa.
 
-### Workflow B: Designing a Non-Resolving Bitonal & Polytonal Progression
+### Workflow C: Designing a Non-Resolving Bitonal & Polytonal Progression
 1. **Find high-ambiguity bitonal partners for a base scale or chord** (e.g., `B Phrygian` or `B Minor triad`):
    ```bash
    cabal run set-tool -- poly-partners B:phrygian
@@ -114,7 +126,7 @@ Given an `N`-note row, generates all `N` cyclic rotations and transposes each ro
    cabal run set-tool -- poly-step B:maj F:maj D:min Ab:min
    ```
 
-### Workflow C: Building & Transforming a Derived 12-Tone Row
+### Workflow D: Building & Transforming a Derived 12-Tone Row
 1. **Pick a core trichord or tetrachord** (e.g., `3-5` `(0,1,6)` — minor second + tritone).
 2. **Generate a 12-tone derived row, inspect its segments, and scan all 48 matrix forms for segment-preserving counter-rows:**
    ```bash

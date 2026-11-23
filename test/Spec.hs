@@ -113,4 +113,9 @@ main = do
   assertTrue "4-18 embeds core triads (C# dim)" (not (null (nrSubsets neo418)))
   assertTrue "4-18 has completing extension supersets (C 7b9)" (not (null (nrSupersets neo418)))
 
+  -- 10. Lewin's IFUNC(X, Y) Common-Tone Theorem (sum of vector == |X| * |Y|)
+  let repIF = analyzeIFunc z15 z29
+      totalDirected = sum (map snd (ifTransTable repIF))
+  assertEqual "IFUNC(4-Z15, 4-Z29) total directed intervals == 4 * 4" 16 totalDirected
+
   putStrLn "All tests passed!"

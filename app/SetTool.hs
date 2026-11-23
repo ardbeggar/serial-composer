@@ -189,6 +189,13 @@ main = do
           exitFailure
         Just pcs -> printNeotonalReport (analyzeNeotonal pcs)
 
+    ["ifunc", rawX, rawY] ->
+      case (parseInput rawX, parseInput rawY) of
+        (Just setX, Just setY) -> printIFuncReport (analyzeIFunc setX setY)
+        _ -> do
+          putStrLn "Error: Could not parse one or both pitch-class sets."
+          exitFailure
+
     [rawA, rawB] ->
       case (parseInput rawA, parseInput rawB) of
         (Just setA, Just setB) -> printComparison setA setB
@@ -214,6 +221,7 @@ main = do
       putStrLn $ "  " ++ prog ++ " poly-multi <L1> <L2> <L3> [...]   Analyze 3+ simultaneous tonal layers"
       putStrLn $ "  " ++ prog ++ " poly-multi-partners <L1> <L2> [m] Rank best 3rd tonal layer to add to L1 + L2"
       putStrLn $ "  " ++ prog ++ " chords <set-or-forte-name>      Map PC set to exact, subset, superset & neighbor chords"
+      putStrLn $ "  " ++ prog ++ " ifunc <setX> <setY>              Compute Lewin's IFUNC(X,Y) common-tone profile"
       putStrLn "Examples:"
       putStrLn $ "  " ++ prog ++ " 4-Z15"
       putStrLn $ "  " ++ prog ++ " 4-Z15 4-Z29"
@@ -702,3 +710,27 @@ printNeotonalReport rep = do
         (cmTag cm)
         ("[" ++ intercalate "," (map pcName (cmPitches cm)) ++ "]")
         (cmExtraInfo cm)
+
+printIFuncReport :: IFuncReport -> IO ()
+printIFuncReport rep = do
+  let x = ifSetX rep
+      y = ifSetY rep
+      (maxT, maxTLevels) = ifMaxTrans rep
+      (maxI, maxILevels) = ifMaxInv rep
+      fmtT xs = if null xs then "None" else intercalate ", " [ "T" ++ show n | n <- xs ]
+      fmtI xs = if null xs then "None" else intercalate ", " [ "T" ++ show n ++ "I" | n <- xs ]
+  putStrLn "=== Lewin's IFUNC(X, Y) Directed Interval & Common-Tone Profile ==="
+  printf "Set X: %-16s (Forte %s)\n" (formatSet x) (forteName x)
+  printf "Set Y: %-16s (Forte %s)\n\n" (formatSet y) (forteName y)
+
+  putStrLn "--- Transpositional Profile: |Tn(X) intersect Y| ---"
+  putStrLn $ "n:           " ++ unwords [ printf "%3d" n | (n, _) <- ifTransTable rep ]
+  putStrLn $ "IFUNC(X,Y):  " ++ unwords [ printf "%3d" c | (_, c) <- ifTransTable rep ]
+  printf   "Max Common Tones (%d): %s\n" maxT (fmtT maxTLevels)
+  printf   "Zero Overlap (0):     %s\n\n" (fmtT (ifZeroTrans rep))
+
+  putStrLn "--- Inversional Profile: |TnI(X) intersect Y| ---"
+  putStrLn $ "n:           " ++ unwords [ printf "%3d" n | (n, _) <- ifInvTable rep ]
+  putStrLn $ "IFUNC_I(X,Y):" ++ unwords [ printf "%3d" c | (_, c) <- ifInvTable rep ]
+  printf   "Max Common Tones (%d): %s\n" maxI (fmtI maxILevels)
+  printf   "Zero Overlap (0):     %s\n" (fmtI (ifZeroInv rep))

@@ -65,6 +65,11 @@ module PitchClassSet
   , findCycleFits
 
   , bestBijection
+
+  , IFuncReport(..)
+  , intervalFunction
+  , inversionIntervalFunction
+  , analyzeIFunc
   ) where
 
 import Data.List (find, intercalate, minimumBy, nub, permutations, sort, subsequences, tails)
@@ -730,6 +735,58 @@ analyzeCombinatoriality raw =
                 , crITransLevels   = iLevels
                 , crClassification = cls
                 }
+
+--------------------------------------------------------------------------------
+-- David Lewin's IFUNC(X, Y) Interval Function & Common-Tone Profiler
+--------------------------------------------------------------------------------
+
+data IFuncReport = IFuncReport
+  { ifSetX       :: PCSet
+  , ifSetY       :: PCSet
+  , ifTransTable :: [(Int, Int)] -- ^ (n, |Tn(X) intersect Y|) for n = 0..11
+  , ifInvTable   :: [(Int, Int)] -- ^ (n, |TnI(X) intersect Y|) for n = 0..11
+  , ifMaxTrans   :: (Int, [Int]) -- ^ (max common tones, list of Tn levels achieving it)
+  , ifZeroTrans  :: [Int]        -- ^ Tn levels with 0 common tones (disjoint union)
+  , ifMaxInv     :: (Int, [Int]) -- ^ (max common tones, list of TnI levels achieving it)
+  , ifZeroInv    :: [Int]        -- ^ TnI levels with 0 common tones (disjoint union)
+  } deriving (Show, Eq)
+
+-- | Computes Lewin's transpositional interval function IFUNC(X, Y)(n) = |Tn(X) intersect Y|
+-- for all n in 0..11 (equivalently, the count of pairs (x in X, y in Y) with (y - x) mod 12 == n).
+intervalFunction :: PCSet -> PCSet -> [(Int, Int)]
+intervalFunction rawX rawY =
+  let x = makeSet rawX
+      y = makeSet rawY
+   in [ (n, length [ p | p <- transposeSet n x, p `elem` y ]) | n <- enumFromTo 0 11 ]
+
+-- | Computes Lewin's inversional interval function IFUNC_I(X, Y)(n) = |TnI(X) intersect Y|
+-- for all n in 0..11 (equivalently, the count of pairs (x in X, y in Y) with (x + y) mod 12 == n).
+inversionIntervalFunction :: PCSet -> PCSet -> [(Int, Int)]
+inversionIntervalFunction rawX rawY =
+  let x = makeSet rawX
+      y = makeSet rawY
+   in [ (n, length [ p | p <- invertSet n x, p `elem` y ]) | n <- enumFromTo 0 11 ]
+
+-- | Builds a complete IFUNC report comparing two pitch-class sets across all Tn and TnI levels.
+analyzeIFunc :: PCSet -> PCSet -> IFuncReport
+analyzeIFunc rawX rawY =
+  let x = makeSet rawX
+      y = makeSet rawY
+      tTab = intervalFunction x y
+      iTab = inversionIntervalFunction x y
+      maxT = maximum (0 : map snd tTab)
+      maxI = maximum (0 : map snd iTab)
+   in IFuncReport
+        { ifSetX       = x
+        , ifSetY       = y
+        , ifTransTable = tTab
+        , ifInvTable   = iTab
+        , ifMaxTrans   = (maxT, [ n | (n, c) <- tTab, c == maxT ])
+        , ifZeroTrans  = [ n | (n, c) <- tTab, c == 0 ]
+        , ifMaxInv     = (maxI, [ n | (n, c) <- iTab, c == maxI ])
+        , ifZeroInv    = [ n | (n, c) <- iTab, c == 0 ]
+        }
+
 
 --------------------------------------------------------------------------------
 -- Formatting Helpers

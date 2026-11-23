@@ -2,7 +2,7 @@
 
 [![Haskell CI](https://github.com)](https://github.com)
 
-`SerialComposer` is a pure Haskell library suite and set of command-line tools (`serial-compose` and `set-tool`) for **N × N serial matrix generation**, **derived and all-interval row construction**, **Stravinsky rotational arrays**, **Allen Forte & John Rahn pitch-class set theory analysis**, **interval cycles**, **2-layer and multi-layer polytonal ambiguity & anti-resolution analysis**, **neotonal chord matching**, and **MusicXML / LilyPond score export**.
+`SerialComposer` is a pure Haskell library suite and set of command-line tools (`serial-compose` and `set-tool`) for **N × N serial matrix generation**, **derived and all-interval row construction**, **Stravinsky rotational arrays**, **Allen Forte, John Rahn & David Lewin pitch-class set theory analysis**, **interval cycles**, **2-layer and multi-layer polytonal ambiguity & anti-resolution analysis**, **neotonal chord matching**, and **MusicXML / LilyPond score export**.
 
 See [docs/THEORY_AND_USAGE.md](docs/THEORY_AND_USAGE.md) for mathematical definitions and combined composition workflows.
 
@@ -22,7 +22,7 @@ serial-composer/
 │   └── SetTool.hs        (set-tool CLI)
 ├── src/
 │   ├── SerialComposer.hs (N x N matrix, invariance, rotational arrays, M5/M7, score export)
-│   ├── PitchClassSet.hs  (Forte/Rahn prime forms, catalog, K/Kh, combinatoriality, cycles)
+│   ├── PitchClassSet.hs  (Forte/Rahn prime forms, catalog, K/Kh, combinatoriality, cycles, IFUNC)
 │   ├── Polytonal.hs      (2-layer & 3+ layer bitonal/polytonal friction, V7 traps, partner ranker)
 │   └── Neotonal.hs       (PC-set to rooted chord matcher, subsets/supersets & L1 neighbors)
 └── test/
@@ -113,7 +113,7 @@ cabal run serial-compose -- -w "0,1,6,7,10" -r D --m5 --rotate --analyze
 
 ## 3. Pitch-Class Set Theory, Polytonality & Neotonal Tool (`set-tool`)
 
-`set-tool` combines Allen Forte's *The Structure of Atonal Music*, John Rahn's prime form algorithm, George Perle's interval cycles, 2-layer / multi-layer polytonal anti-resolution analysis, and neotonal chord matching.
+`set-tool` combines Allen Forte's *The Structure of Atonal Music*, John Rahn's prime form algorithm, David Lewin's interval function (`IFUNC`), George Perle's interval cycles, 2-layer / multi-layer polytonal anti-resolution analysis, and neotonal chord matching.
 
 ### Set-Theory Commands (`PitchClassSet`)
 
@@ -121,11 +121,12 @@ cabal run serial-compose -- -w "0,1,6,7,10" -r D --m5 --rotate --analyze
 | :--- | :--- |
 | `set-tool <set-or-forte-name>` | Full analysis: Normal Order & Prime Form (Forte & Rahn), Interval Vector, Complement, Z-Mate, `M5`/`M7` transforms, `Tn` & `TnI` common tones, internal symmetry, `R1`/`R2`/`Rp` similar sets, and embedded trichords |
 | `set-tool <set-1> <set-2>` | Compare two sets: `Tn`/`TnI` equivalence, exact `Tn`/`TnI` mapping (`A -> B`), Z-relation, and `R1`/`R2`/`Rp` similarity |
+| `set-tool ifunc <setX> <setY>` | Compute David Lewin's `IFUNC(X, Y)` and `IFUNC_I(X, Y)` directed interval and common-tone profiles (`\|Tn(X) ∩ Y\|` and `\|TnI(X) ∩ Y\|`) across all `n = 0..11` |
 | `set-tool voicelead <src> <target>` | Find the most parsimonious `Tn`/`TnI` voice-leadings from `<src>` to `<target>` with minimum total semitone displacement |
 | `set-tool supersets <set> [card]` | Find all Forte catalog supersets containing `<set>` (optionally filtered to cardinality `card`), with embedding multiplicity `[xN]` |
 | `set-tool subsets <set> [card]` | Find all Forte catalog subsets contained in `<set>` (optionally filtered to cardinality `card`), with embedding multiplicity `[xN]` |
 | `set-tool complex <set>` | List all members of Forte Set-Complex `K` and Subcomplex `Kh` around `<set>` and its complement |
-| `set-tool nexus <set1> <set2>` | Find every catalog nexus set class holding a `K` or `Kh` relation with all given sets simultaneously |
+| `set-tool nexus <set1> <set2> ...` | Find every catalog nexus set class holding a `K` or `Kh` relation with all given sets simultaneously |
 | `set-tool comb <hexachord>` | Analyze a 6-note hexachord for `P`/`R` and `I`/`RI` aggregate combinatoriality |
 | `set-tool cycle <k \| k1,k2> [start]` | Generate a basic `Ck` cycle (with all 12-tone cosets) or an alternating `Alt(k1,k2)` cycle |
 | `set-tool cycle-fit <set>` | Find all basic and alternating interval cycles containing `<set>` (marking `[CONTIGUOUS]` vs `[SUBSET]`) |
@@ -149,6 +150,12 @@ Layer arguments accept either `Root:mode` syntax (e.g., `B:phrygian`, `F:minor`,
 | `set-tool chords <set-or-forte-name>` | Map an arbitrary pitch-class set to exact rooted chords (`C == S`), embedded core chords (`C subset S`), completing extension supersets (`S subset C`), and 1-semitone voice-leading neighbors (`Dist = 1`), tagging chord families neutrally |
 
 ### Examples
+
+**Profile directed intervals and common tones between two sets using Lewin's `IFUNC(X, Y)`:**
+
+```bash
+cabal run set-tool -- ifunc 0,1,6,7 0,1,4,6
+```
 
 **Map an atonal pitch-class set to neotonal chords and 1-semitone voice-leading neighbors:**
 
@@ -232,10 +239,13 @@ import Polytonal
 import Neotonal
 import System.Random (mkStdGen)
 
+-- Compute Lewin's IFUNC(X, Y) between 4-9 and 4-Z15
+let repIF = analyzeIFunc (makeSet (0 : 1 : 6 : 7 : mempty)) (makeSet (0 : 1 : 4 : 6 : mempty))
+ifMaxTrans repIF
+
 -- Map an atonal set to embedded chords, extension supersets, and 1-semitone neighbors
-let rep = analyzeNeotonal (makeSet (0 : 1 : 4 : 6 : 7 : mempty))
-map cmSymbol (nrSubsets rep)
-map cmSymbol (nrNeighbors rep)
+let repNeo = analyzeNeotonal (makeSet (0 : 1 : 4 : 6 : 7 : mempty))
+map cmSymbol (nrSubsets repNeo)
 
 -- Analyze 3-layer polytonal independence (e.g., Guitar + Bass + Synth)
 let Just l1 = parseLayerSpec "B:min"
