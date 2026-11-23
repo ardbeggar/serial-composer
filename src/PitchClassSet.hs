@@ -63,6 +63,8 @@ module PitchClassSet
   , cycleCosets
   , alternatingCycle
   , findCycleFits
+
+  , bestBijection
   ) where
 
 import Data.List (find, intercalate, minimumBy, nub, permutations, sort, subsequences, tails)
