@@ -1,8 +1,8 @@
 # SerialComposer
 
-[![Haskell CI](https://github.com/ardbeggar/serial-composer/actions/workflows/ci.yml/badge.svg)](https://github.com/ardbeggar/serial-composer/actions/workflows/ci.yml)
+[![Haskell CI](https://github.com)](https://github.com)
 
-`SerialComposer` is a pure Haskell library suite and set of command-line tools (`serial-compose` and `set-tool`) for **N × N serial matrix generation**, **derived and all-interval row construction**, **Stravinsky rotational arrays**, **Allen Forte & John Rahn pitch-class set theory analysis**, **interval cycles**, **2-layer and multi-layer polytonal ambiguity & anti-resolution analysis**, and **MusicXML / LilyPond score export**.
+`SerialComposer` is a pure Haskell library suite and set of command-line tools (`serial-compose` and `set-tool`) for **N × N serial matrix generation**, **derived and all-interval row construction**, **Stravinsky rotational arrays**, **Allen Forte & John Rahn pitch-class set theory analysis**, **interval cycles**, **2-layer and multi-layer polytonal ambiguity & anti-resolution analysis**, **neotonal chord matching**, and **MusicXML / LilyPond score export**.
 
 See [docs/THEORY_AND_USAGE.md](docs/THEORY_AND_USAGE.md) for mathematical definitions and combined composition workflows.
 
@@ -13,16 +13,20 @@ See [docs/THEORY_AND_USAGE.md](docs/THEORY_AND_USAGE.md) for mathematical defini
 ```text
 serial-composer/
 ├── serial-composer.cabal
+├── LICENSE
 ├── README.md
 ├── docs/
 │   └── THEORY_AND_USAGE.md
 ├── app/
 │   ├── Main.hs           (serial-compose CLI)
 │   └── SetTool.hs        (set-tool CLI)
-└── src/
-    ├── SerialComposer.hs (N x N matrix, invariance, rotational arrays, M5/M7, score export)
-    ├── PitchClassSet.hs  (Forte/Rahn prime forms, catalog, K/Kh, combinatoriality, cycles)
-    └── Polytonal.hs      (2-layer & 3+ layer bitonal/polytonal friction, V7 traps, partner ranker)
+├── src/
+│   ├── SerialComposer.hs (N x N matrix, invariance, rotational arrays, M5/M7, score export)
+│   ├── PitchClassSet.hs  (Forte/Rahn prime forms, catalog, K/Kh, combinatoriality, cycles)
+│   ├── Polytonal.hs      (2-layer & 3+ layer bitonal/polytonal friction, V7 traps, partner ranker)
+│   └── Neotonal.hs       (PC-set to rooted chord matcher, subsets/supersets & L1 neighbors)
+└── test/
+    └── Spec.hs           (Automated unit test suite)
 ```
 
 ---
@@ -35,12 +39,13 @@ serial-composer/
 
 ---
 
-## 1. Building & Installing
+## 1. Building, Testing & Installing
 
-Build both libraries and CLI executables:
+Build both libraries, CLI executables, and run the test suite:
 
 ```bash
 cabal build
+cabal test --test-show-details=direct
 ```
 
 Optional: Install `serial-compose` and `set-tool` to your local Cabal bin directory (`~/.cabal/bin` or `~/.local/bin`):
@@ -106,9 +111,9 @@ cabal run serial-compose -- -w "0,1,6,7,10" -r D --m5 --rotate --analyze
 
 ---
 
-## 3. Pitch-Class Set Theory & Polytonality Tool (`set-tool`)
+## 3. Pitch-Class Set Theory, Polytonality & Neotonal Tool (`set-tool`)
 
-`set-tool` combines Allen Forte's *The Structure of Atonal Music*, John Rahn's prime form algorithm, George Perle's interval cycles, and 2-layer / multi-layer polytonal anti-resolution analysis.
+`set-tool` combines Allen Forte's *The Structure of Atonal Music*, John Rahn's prime form algorithm, George Perle's interval cycles, 2-layer / multi-layer polytonal anti-resolution analysis, and neotonal chord matching.
 
 ### Set-Theory Commands (`PitchClassSet`)
 
@@ -137,7 +142,21 @@ Layer arguments accept either `Root:mode` syntax (e.g., `B:phrygian`, `F:minor`,
 | `set-tool poly-multi <L1> <L2> <L3> ...` | Analyze 3 or more simultaneous tonal layers for aggregate saturation, universal pivots, pairwise layer breakdown, and global cross-layer `V7` traps |
 | `set-tool poly-multi-partners <L1> <L2> [mode]` | Rank the best non-resolving 3rd tonal layer to add on top of an existing two-layer foundation `<L1> + <L2>` |
 
+### Neotonal Chord Mapping (`Neotonal`)
+
+| Command | Description |
+| :--- | :--- |
+| `set-tool chords <set-or-forte-name>` | Map an arbitrary pitch-class set to exact rooted chords (`C == S`), embedded core chords (`C subset S`), completing extension supersets (`S subset C`), and 1-semitone voice-leading neighbors (`Dist = 1`), tagging chord families neutrally |
+
 ### Examples
+
+**Map an atonal pitch-class set to neotonal chords and 1-semitone voice-leading neighbors:**
+
+```bash
+cabal run set-tool -- chords 0,1,4,6,7
+cabal run set-tool -- chords 0,1,6,7
+cabal run set-tool -- chords 3-5
+```
 
 **Analyze a set (including Forte vs. Rahn prime form comparison on diverging sets like `5-20`):**
 
@@ -200,7 +219,7 @@ When using `serial-compose --root` (without `--octave`), octaves are selected au
 
 ## 5. Using the Libraries in GHCi
 
-Launch an interactive session with `SerialComposer`, `PitchClassSet`, and `Polytonal` loaded:
+Launch an interactive session with `SerialComposer`, `PitchClassSet`, `Polytonal`, and `Neotonal` loaded:
 
 ```bash
 cabal repl
@@ -210,18 +229,19 @@ cabal repl
 import SerialComposer
 import PitchClassSet
 import Polytonal
+import Neotonal
 import System.Random (mkStdGen)
+
+-- Map an atonal set to embedded chords, extension supersets, and 1-semitone neighbors
+let rep = analyzeNeotonal (makeSet (0 : 1 : 4 : 6 : 7 : mempty))
+map cmSymbol (nrSubsets rep)
+map cmSymbol (nrNeighbors rep)
 
 -- Analyze 3-layer polytonal independence (e.g., Guitar + Bass + Synth)
 let Just l1 = parseLayerSpec "B:min"
 let Just l2 = parseLayerSpec "F:min"
 let Just l3 = parseLayerSpec "D:maj"
 fmap mpOverallAmbiguity (analyzeMultiPoly [l1, l2, l3])
-
--- Generate a derived 12-tone row, scan 4N invariance, and print its rotational array
-let (Just dRow, _) = deriveRow12 (mkStdGen 42)
-printRowSegmentation 11 dRow
-printRowInvariance 12 11 dRow
 ```
 
 ---
@@ -240,6 +260,7 @@ mscore doom_b.musicxml
 lilypond doom_b.ly
 # Generates doom_b.pdf and doom_b.midi
 ```
+
 ---
 
 ## Acknowledgments

@@ -1,6 +1,6 @@
 # Theory & Workflow Guide
 
-This guide explains the set-theory and polytonal concepts implemented in `PitchClassSet`, `Polytonal`, and `SerialComposer`, along with practical composition workflows.
+This guide explains the set-theory, polytonal, and neotonal concepts implemented in `PitchClassSet`, `Polytonal`, `Neotonal`, and `SerialComposer`, along with practical composition workflows.
 
 ---
 
@@ -68,7 +68,17 @@ When writing polytonal or bitonal music, sustaining ambiguity requires avoiding 
 
 ---
 
-## 3. Serial Matrix & Rotational Techniques (`SerialComposer`)
+## 3. Bridging Pitch-Class Sets & Neotonality (`Neotonal`)
+
+Every rooted triad, seventh chord, extended/altered chord, suspended chord, or quartal stack is a concrete `PCSet`. `Neotonal` relates any arbitrary atonal pitch-class set `S` to rooted chords across four tiers without artificially prioritizing one voicing style over another:
+1. **Exact Chord Matches (`C == S`):** Rooted chord symbols whose exact pitch-class collection matches `S`.
+2. **Embedded Core Chords (`C subset S`):** Familiar triads or seventh chords contained inside `S`, showing which non-chord tones provide dissonant color.
+3. **Completing Extension Chords (`S subset C`):** Larger extended or altered harmonies that contain all of `S`, showing which added tensions (`9`, `#11`, `b9`, etc.) complete the chord.
+4. **1-Semitone Voice-Leading Neighbors (`Dist = 1`):** Equal-cardinality rooted chords reachable by shifting a single note of `S` up or down by one half-step, enabling seamless transitions between atonal cells and neotonal sonorities.
+
+---
+
+## 4. Serial Matrix & Rotational Techniques (`SerialComposer`)
 
 ### 4N Row-Invariance Scanner (`--invariance`)
 Scans all `4N` forms (`P`, `R`, `I`, `RI`) of a matrix against `P0` to find transformations preserving the unordered pitch-class set (when `N < 12`), preserving discrete `k`-note partitions (trichords, tetrachords, hexachords), or locking pitches into identical ordinal positions.
@@ -78,9 +88,17 @@ Given an `N`-note row, generates all `N` cyclic rotations and transposes each ro
 
 ---
 
-## 4. Combined Composition Workflows
+## 5. Combined Composition Workflows
 
-### Workflow A: Designing a Non-Resolving Bitonal & Polytonal Progression
+### Workflow A: Bridging Atonal Cells into Neotonal Harmony
+1. **Take an atonal harmonic cell from your row or rotational array** (e.g., `0,1,4,6,7`).
+2. **Inspect embedded triads/sevenths, completing extensions, and 1-semitone voice-leading neighbors:**
+   ```bash
+   cabal run set-tool -- chords 0,1,4,6,7
+   ```
+3. Use a 1-semitone neighbor chord to pivot smoothly from a dense atonal riff into an open neotonal cadence—or vice versa.
+
+### Workflow B: Designing a Non-Resolving Bitonal & Polytonal Progression
 1. **Find high-ambiguity bitonal partners for a base scale or chord** (e.g., `B Phrygian` or `B Minor triad`):
    ```bash
    cabal run set-tool -- poly-partners B:phrygian
@@ -96,7 +114,7 @@ Given an `N`-note row, generates all `N` cyclic rotations and transposes each ro
    cabal run set-tool -- poly-step B:maj F:maj D:min Ab:min
    ```
 
-### Workflow B: Building & Transforming a Derived 12-Tone Row
+### Workflow C: Building & Transforming a Derived 12-Tone Row
 1. **Pick a core trichord or tetrachord** (e.g., `3-5` `(0,1,6)` — minor second + tritone).
 2. **Generate a 12-tone derived row, inspect its segments, and scan all 48 matrix forms for segment-preserving counter-rows:**
    ```bash
@@ -105,18 +123,4 @@ Given an `N`-note row, generates all `N` cyclic rotations and transposes each ro
 3. **Create a contrasting open quartal/quintal variation using `--m5`:**
    ```bash
    cabal run serial-compose -- --derive 0,1,6 -r B --seed 42 --m5 --analyze --plain -f derived_m5
-   ```
-
-### Workflow C: Rotational Arrays, Interval Cycles & Parsimonious Voice-Leading
-1. **Generate a Stravinsky rotational array and inspect its vertical column chords:**
-   ```bash
-   cabal run serial-compose -- -w "0,1,6,7,10" -r B --rotate --invariance
-   ```
-2. **Check which symmetrical interval cycles embed your row or chords:**
-   ```bash
-   cabal run set-tool -- cycle-fit 0,1,6,7,10
-   ```
-3. **Find the smoothest voice-leading from one chord to another set class:**
-   ```bash
-   cabal run set-tool -- voicelead 0,1,6,7 4-Z15
    ```
