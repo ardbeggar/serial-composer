@@ -30,11 +30,15 @@ Counts the total occurrences of all six interval classes (unordered pitch-class 
 - `ic5`: Perfect 4th / Perfect 5th (5 or 7 semitones)
 - `ic6`: Tritone (6 semitones)
 
-### Z-Relations & Similarity (`R1`, `R2`, `Rp`)
+### Z-Relations & Similarity (`R0`, `R1`, `R2`, `Rp`)
 - **Z-Related Sets:** Two set classes with **identical Interval Vectors** but **different Prime Forms** (for example, `4-Z15` `(0,1,4,6)` and `4-Z29` `(0,1,3,7)`, both having `<111111>`).
 - **`R1` (Maximum Similarity):** Two sets of the same cardinality share 4 identical entries in their Interval Vectors, and the remaining 2 entries are swapped (e.g., `<221131>` and `<221311>`).
 - **`R2` (Strong Similarity):** Two sets share 4 identical Interval Vector entries, while the remaining 2 entries differ without swapping.
+- **`R0` (Minimum Similarity / Maximum Contrast):** Two sets of the same cardinality share **zero** identical entries in their Interval Vectors (for example, `5-35` `<032140>` and `5-6` `<311221>`).
 - **`Rp` (Pitch-Class Similarity):** Two sets of cardinality `N` share at least one common abstract subset of cardinality `N - 1`.
+
+### 12-Trichord Embedding Fingerprint (`Emb(3, S)`)
+For any pitch-class set `S` of cardinality `N`, counts how many of its `N choose 3` subsets belong to each of the 12 Forte trichord classes (`3-1` through `3-12`). Even Z-related sets with identical interval vectors (`6-Z19` vs. `6-Z44`) exhibit distinct trichord embedding fingerprints that explain their differing harmonic colors.
 
 ### David Lewin's Interval Function (`IFUNC(X, Y)` & `IFUNC_I(X, Y)`)
 - **`IFUNC(X, Y)(n)`:** Counts all ordered pairs `(x ∈ X, y ∈ Y)` such that `(y - x) mod 12 == n` for `n = 0..11`.
@@ -108,7 +112,15 @@ Given an `N`-note row, generates all `N` cyclic rotations and transposes each ro
 
 ## 6. Combined Composition Workflows
 
-### Workflow A: Tracking Melodic Gesture Across Interval Stretches (`Contour`)
+### Workflow A: Comparing Harmonic Fingerprints & Finding `R0` Contrasts
+1. **Inspect the 12-trichord embedding profile and `R0` contrasting set classes of a harmony:**
+   ```bash
+   cabal run set-tool -- fingerprint 6-Z19
+   cabal run set-tool -- fingerprint 5-35
+   ```
+2. Pair a set with one of its `R0` neighbors in a contrasting section to achieve maximum intervallic contrast while maintaining the same harmonic density.
+
+### Workflow B: Tracking Melodic Gesture Across Interval Stretches (`Contour`)
 1. **Extract the Contour Segment (`CSeg`) and `COM-Matrix` of a core riff motif:**
    ```bash
    cabal run set-tool -- contour B2,F3,C3,Eb3
@@ -118,14 +130,14 @@ Given an `N`-note row, generates all `N` cyclic rotations and transposes each ro
    cabal run set-tool -- contour B2,F3,C3,Eb3 D4,G3,C4,A3
    ```
 
-### Workflow B: Connecting Two Different Chords or Sections via Lewin's `IFUNC`
+### Workflow C: Connecting Two Different Chords or Sections via Lewin's `IFUNC`
 1. **Profile all 12 transpositions and inversions between Section A's set `X` and Section B's set `Y`:**
    ```bash
    cabal run set-tool -- ifunc 0,1,6,7 0,1,4,6
    ```
 2. Choose a `Tn` or `TnI` level with maximum common tones (`Max Common Tones`) for smooth pivot voice-leading, or `Zero Overlap` for an abrupt textural break.
 
-### Workflow C: Bridging Atonal Cells into Neotonal Harmony
+### Workflow D: Bridging Atonal Cells into Neotonal Harmony
 1. **Take an atonal harmonic cell from your row or rotational array** (e.g., `0,1,4,6,7`).
 2. **Inspect embedded triads/sevenths, completing extensions, and 1-semitone voice-leading neighbors:**
    ```bash
@@ -133,7 +145,7 @@ Given an `N`-note row, generates all `N` cyclic rotations and transposes each ro
    ```
 3. Use a 1-semitone neighbor chord to pivot smoothly from a dense atonal riff into an open neotonal cadence—or vice versa.
 
-### Workflow D: Designing a Non-Resolving Bitonal & Polytonal Progression
+### Workflow E: Designing a Non-Resolving Bitonal & Polytonal Progression
 1. **Find high-ambiguity bitonal partners for a base scale or chord** (e.g., `B Phrygian` or `B Minor triad`):
    ```bash
    cabal run set-tool -- poly-partners B:phrygian
@@ -147,15 +159,4 @@ Given an `N`-note row, generates all `N` cyclic rotations and transposes each ro
 3. **Validate transitions between polychords so you never trigger an unintended cadence:**
    ```bash
    cabal run set-tool -- poly-step B:maj F:maj D:min Ab:min
-   ```
-
-### Workflow E: Building & Transforming a Derived 12-Tone Row
-1. **Pick a core trichord or tetrachord** (e.g., `3-5` `(0,1,6)` — minor second + tritone).
-2. **Generate a 12-tone derived row, inspect its segments, and scan all 48 matrix forms for segment-preserving counter-rows:**
-   ```bash
-   cabal run serial-compose -- --derive 0,1,6 -r B --seed 42 --analyze --invariance --plain -f derived_3_5
-   ```
-3. **Create a contrasting open quartal/quintal variation using `--m5`:**
-   ```bash
-   cabal run serial-compose -- --derive 0,1,6 -r B --seed 42 --m5 --analyze --plain -f derived_m5
    ```

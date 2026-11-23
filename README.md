@@ -22,7 +22,7 @@ serial-composer/
 │   └── SetTool.hs        (set-tool CLI)
 ├── src/
 │   ├── SerialComposer.hs (N x N matrix, invariance, rotational arrays, M5/M7, score export)
-│   ├── PitchClassSet.hs  (Forte/Rahn prime forms, catalog, K/Kh, combinatoriality, cycles, IFUNC)
+│   ├── PitchClassSet.hs  (Forte/Rahn prime forms, catalog, K/Kh, combinatoriality, cycles, IFUNC, R0)
 │   ├── Polytonal.hs      (2-layer & 3+ layer bitonal/polytonal friction, V7 traps, partner ranker)
 │   ├── Neotonal.hs       (PC-set to rooted chord matcher, subsets/supersets & L1 neighbors)
 │   └── Contour.hs        (Robert Morris melodic contour segments, COM-Matrix & equivalence)
@@ -121,7 +121,8 @@ cabal run serial-compose -- -w "0,1,6,7,10" -r D --m5 --rotate --analyze
 | Command | Description |
 | :--- | :--- |
 | `set-tool <set-or-forte-name>` | Full analysis: Normal Order & Prime Form (Forte & Rahn), Interval Vector, Complement, Z-Mate, `M5`/`M7` transforms, `Tn` & `TnI` common tones, internal symmetry, `R1`/`R2`/`Rp` similar sets, and embedded trichords |
-| `set-tool <set-1> <set-2>` | Compare two sets: `Tn`/`TnI` equivalence, exact `Tn`/`TnI` mapping (`A -> B`), Z-relation, and `R1`/`R2`/`Rp` similarity |
+| `set-tool <set-1> <set-2>` | Compare two sets: `Tn`/`TnI` equivalence, exact `Tn`/`TnI` mapping (`A -> B`), Z-relation, and `R0`/`R1`/`R2`/`Rp` similarity |
+| `set-tool fingerprint <set>` | Show the 12-trichord embedding vector (`3-1`..`3-12`), dominant/absent trichord colors, and Forte `R0` maximally contrasting set classes |
 | `set-tool ifunc <setX> <setY>` | Compute David Lewin's `IFUNC(X, Y)` and `IFUNC_I(X, Y)` directed interval and common-tone profiles (`\|Tn(X) ∩ Y\|` and `\|TnI(X) ∩ Y\|`) across all `n = 0..11` |
 | `set-tool voicelead <src> <target>` | Find the most parsimonious `Tn`/`TnI` voice-leadings from `<src>` to `<target>` with minimum total semitone displacement |
 | `set-tool supersets <set> [card]` | Find all Forte catalog supersets containing `<set>` (optionally filtered to cardinality `card`), with embedding multiplicity `[xN]` |
@@ -160,6 +161,13 @@ Layer arguments accept either `Root:mode` syntax (e.g., `B:phrygian`, `F:minor`,
 | `set-tool chords <set-or-forte-name>` | Map an arbitrary pitch-class set to exact rooted chords (`C == S`), embedded core chords (`C subset S`), completing extension supersets (`S subset C`), and 1-semitone voice-leading neighbors (`Dist = 1`), tagging chord families neutrally |
 
 ### Examples
+
+**Inspect the 12-trichord embedding vector and `R0` maximally contrasting set classes:**
+
+```bash
+cabal run set-tool -- fingerprint 6-Z19
+cabal run set-tool -- fingerprint 5-35
+```
 
 **Analyze melodic contour (`CSeg` & `COM-Matrix`) and compare two melodies:**
 
@@ -257,17 +265,14 @@ import Neotonal
 import Contour
 import System.Random (mkStdGen)
 
+-- Inspect the 12-trichord embedding vector and R0 contrasts of 5-35
+let s535 = makeSet (0 : 2 : 4 : 7 : 9 : mempty)
+trichordProfile s535
+map feName (findR0Sets s535)
+
 -- Analyze melodic contour of B2 -> F3 -> C3 -> Eb3
 toCSeg (47 : 53 : 48 : 51 : mempty)         -- <0, 3, 1, 2>
 primeContour (47 : 53 : 48 : 51 : mempty)   -- <0, 3, 1, 2>
-
--- Compute Lewin's IFUNC(X, Y) between 4-9 and 4-Z15
-let repIF = analyzeIFunc (makeSet (0 : 1 : 6 : 7 : mempty)) (makeSet (0 : 1 : 4 : 6 : mempty))
-ifMaxTrans repIF
-
--- Map an atonal set to embedded chords, extension supersets, and 1-semitone neighbors
-let repNeo = analyzeNeotonal (makeSet (0 : 1 : 4 : 6 : 7 : mempty))
-map cmSymbol (nrSubsets repNeo)
 ```
 
 ---
