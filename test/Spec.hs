@@ -126,4 +126,15 @@ main = do
   assertTrue "melA and melB belong to same Contour Class (I-related)"
     (areContoursEquivalent melA melB)
 
+  -- 12. Forte R0 similarity & 12-Trichord Embedding Fingerprint
+  let pent535 = pcs (0 : 2 : 4 : 7 : 9 : mempty) -- IV <032140> (Pentatonic)
+      pent506 = pcs (0 : 1 : 2 : 5 : 6 : mempty) -- IV <311221>
+  assertTrue "5-35 and 5-6 are R0-related" ("R0" `elem` similarityRelation pent535 pent506)
+  assertTrue "5-6 appears in findR0Sets of 5-35"
+    (any (\e -> feName e == "5-6") (findR0Sets pent535))
+
+  let prof535 = trichordProfile pent535
+  assertEqual "12-trichord profile has 12 slots" 12 (length prof535)
+  assertEqual "5-35 total embedded trichords == 5 choose 3 (10)" 10 (sum (map snd prof535))
+
   putStrLn "All tests passed!"

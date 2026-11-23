@@ -212,6 +212,13 @@ main = do
           putStrLn "Error: Could not parse one or both contour sequences."
           exitFailure
 
+    ["fingerprint", rawSet] ->
+      case parseInput rawSet of
+        Nothing -> do
+          putStrLn $ "Error: Could not parse pitch-class set or Forte name '" ++ rawSet ++ "'."
+          exitFailure
+        Just pcs -> printFingerprintReport pcs
+
     [rawA, rawB] ->
       case (parseInput rawA, parseInput rawB) of
         (Just setA, Just setB) -> printComparison setA setB
@@ -239,6 +246,7 @@ main = do
       putStrLn $ "  " ++ prog ++ " chords <set-or-forte-name>      Map PC set to exact, subset, superset & neighbor chords"
       putStrLn $ "  " ++ prog ++ " ifunc <setX> <setY>              Compute Lewin's IFUNC(X,Y) common-tone profile"
       putStrLn $ "  " ++ prog ++ " contour <seq1> [seq2]           Analyze melodic contour (CSeg/COM) or compare two melodies"
+      putStrLn $ "  " ++ prog ++ " fingerprint <set-or-forte-name> Show 12-trichord embedding vector & R0 contrast sets"
       putStrLn "Examples:"
       putStrLn $ "  " ++ prog ++ " 4-Z15"
       putStrLn $ "  " ++ prog ++ " 4-Z15 4-Z29"
@@ -794,3 +802,39 @@ printContourComparison caA caB = do
   putStrLn ""
   putStrLn $ "Same Contour Class: " ++ if caPrime caA == caPrime caB then "YES" else "NO"
   putStrLn $ "Exact Relation:     " ++ if null rels then "None (different contour shapes)" else intercalate ", " rels
+
+printFingerprintReport :: PCSet -> IO ()
+printFingerprintReport pcs = do
+  let pf      = primeForm pcs
+      card    = length pf
+      profile = trichordProfile pcs
+      total3  = sum (map snd profile)
+      maxCnt  = maximum (0 : map snd profile)
+      doms    = [ feName e ++ " (" ++ intercalate "," (map show (fePrime e)) ++ ")"
+                | (e, c) <- profile, maxCnt > 0 && c == maxCnt ]
+      absent  = [ feName e | (e, c) <- profile, c == 0 ]
+      r0Sets  = findR0Sets pf
+
+  printf "=== 12-Trichord Embedding Fingerprint & R0 Contrast: %s (%s) ===\n"
+    (forteName pf) (intercalate "," (map show pf))
+  printf "Cardinality: %d  |  Total 3-note subsets: %d  |  Interval Vector: %s\n\n"
+    card total3 (formatVector (intervalVector pf))
+
+  putStrLn "--- 12-Trichord Embedding Vector (3-1 through 3-12) ---"
+  putStrLn $ "Trichord: " ++ unwords [ printf "%5s" (feName e) | (e, _) <- profile ]
+  putStrLn $ "Count:    " ++ unwords [ printf "%5d" c          | (_, c) <- profile ]
+  putStrLn ""
+  putStrLn $ "Dominant Color(s) [x" ++ show maxCnt ++ "]: "
+          ++ if null doms then "None (cardinality < 3)" else intercalate ", " doms
+  putStrLn $ "Absent Trichords (0):  "
+          ++ if null absent then "None (pan-trichordal!)" else intercalate ", " absent
+
+  putStrLn "\n--- Forte R0 Maximally Contrasting Set Classes (0 matching IV entries) ---"
+  if null r0Sets
+    then putStrLn "  None in catalog for this cardinality"
+    else mapM_ (\e ->
+                  printf "  %-7s (%-17s) %s\n"
+                    (feName e)
+                    (intercalate "," (map show (fePrime e)))
+                    (formatVector (feVector e)))
+               r0Sets

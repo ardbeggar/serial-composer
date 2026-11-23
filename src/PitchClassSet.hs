@@ -70,6 +70,9 @@ module PitchClassSet
   , intervalFunction
   , inversionIntervalFunction
   , analyzeIFunc
+
+  , findR0Sets
+  , trichordProfile
   ) where
 
 import Data.List (find, intercalate, minimumBy, nub, permutations, sort, subsequences, tails)
@@ -567,7 +570,11 @@ findZMate raw =
 -- Interval-Vector Similarity Relations (Forte: R1, R2, Rp)
 --------------------------------------------------------------------------------
 
--- | Evaluates Forte's similarity relations between two sets of the same cardinality.
+-- | Evaluates Forte's similarity relations between two sets of the same cardinality:
+-- * R1: Maximum similarity (4 identical vector entries, remaining 2 swapped)
+-- * R2: Strong similarity (4 identical vector entries, remaining 2 not swapped)
+-- * R0: Minimum similarity (0 identical vector entries — maximum intervallic contrast)
+-- * Rp: Pitch-class similarity (share a common subset of cardinality N - 1)
 similarityRelation :: PCSet -> PCSet -> [String]
 similarityRelation rawA rawB =
   let pfA = primeForm rawA
@@ -578,14 +585,41 @@ similarityRelation rawA rawB =
         then mempty
         else
           let diffs = [ (a, b) | (a, b) <- zip ivA ivB, a /= b ]
-              r1r2 = case diffs of
-                       [(a1, b1), (a2, b2)] ->
-                         if a1 == b2 && b1 == a2 then ["R1"] else ["R2"]
-                       _ -> mempty
+              ivRel = case diffs of
+                        [(a1, b1), (a2, b2)] ->
+                          if a1 == b2 && b1 == a2 then ["R1"] else ["R2"]
+                        _ | all (\(a, b) -> a /= b) (zip ivA ivB) -> ["R0"]
+                          | otherwise -> mempty
               subsA = map snd (subsetsOfSize (length pfA - 1) pfA)
               subsB = map snd (subsetsOfSize (length pfB - 1) pfB)
               rp = if any (`elem` subsB) subsA then ["Rp"] else mempty
-           in r1r2 ++ rp
+           in ivRel ++ rp
+
+-- | Finds all set classes of the same cardinality in the Forte catalog with R0
+-- (minimum similarity / zero matching interval-vector entries) relative to @raw@.
+findR0Sets :: PCSet -> [ForteEntry]
+findR0Sets raw =
+  let pf   = primeForm raw
+      card = length pf
+      ivA  = intervalVector pf
+   in [ entry
+      | entry <- forteCatalog
+      , length (fePrime entry) == card
+      , fePrime entry /= pf
+      , all (\(a, b) -> a /= b) (zip ivA (feVector entry))
+      ]
+
+-- | Computes the 12-Trichord Embedding Fingerprint:
+-- For each of the 12 Forte trichord classes ("3-1" through "3-12"), counts how many
+-- distinct 3-note subsets of @raw@ belong to that trichord class.
+trichordProfile :: PCSet -> [(ForteEntry, Int)]
+trichordProfile raw =
+  let s = makeSet raw
+      trichords = filter (\e -> length (fePrime e) == 3) forteCatalog
+      allTriPFs = map snd (subsetsOfSize 3 s)
+   in [ (entry, length (filter (== fePrime entry) allTriPFs))
+      | entry <- trichords
+      ]
 
 -- | Finds all set classes of the same cardinality in the Forte catalog sharing R1, R2, or Rp.
 findSimilarSets :: PCSet -> [(ForteEntry, [String])]
@@ -595,7 +629,7 @@ findSimilarSets raw =
       candidates = filter (\e -> length (fePrime e) == card && fePrime e /= pf) forteCatalog
    in [ (entry, rels)
       | entry <- candidates
-      , let rels = similarityRelation pf (fePrime entry)
+      , let rels = filter (/= "R0") (similarityRelation pf (fePrime entry))
       , not (null rels)
       ]
 
