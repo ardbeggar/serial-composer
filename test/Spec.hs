@@ -1,6 +1,7 @@
 module Main (main) where
 
 import Control.Monad (unless)
+import Neotonal
 import PitchClassSet
 import Polytonal
 import SerialComposer
@@ -101,5 +102,15 @@ main = do
       assertTrue "B:min + F:min has zero V7 traps" (null (paDominantTraps pa))
       assertTrue "B:min + F:min achieves high ambiguity (>= 70)" (paAmbiguityScore pa >= 70)
     _ -> assertTrue "parseLayerSpec B:min / F:min" False
+
+  -- 9. Neotonal chord vocabulary matching
+  let dim7Set = pcs (0 : 3 : 6 : 9 : mempty)
+      neoDim  = analyzeNeotonal dim7Set
+  assertEqual "dim7 exact matches count (4 symmetric roots)" 4 (length (nrExact neoDim))
+
+  let tet418 = pcs (0 : 1 : 4 : 7 : mempty)
+      neo418 = analyzeNeotonal tet418
+  assertTrue "4-18 embeds core triads (C# dim)" (not (null (nrSubsets neo418)))
+  assertTrue "4-18 has completing extension supersets (C 7b9)" (not (null (nrSupersets neo418)))
 
   putStrLn "All tests passed!"
