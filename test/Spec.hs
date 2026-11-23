@@ -2,6 +2,7 @@ module Main (main) where
 
 import Control.Monad (unless)
 import Neotonal
+import Contour
 import PitchClassSet
 import Polytonal
 import SerialComposer
@@ -117,5 +118,12 @@ main = do
   let repIF = analyzeIFunc z15 z29
       totalDirected = sum (map snd (ifTransTable repIF))
   assertEqual "IFUNC(4-Z15, 4-Z29) total directed intervals == 4 * 4" 16 totalDirected
+
+  -- 11. Robert Morris Melodic Contour Segments & Prime Equivalence
+  let melA = 47 : 53 : 48 : 51 : mempty -- B2, F3, C3, Eb3 -> <0,3,1,2>
+      melB = 62 : 55 : 60 : 57 : mempty -- D4, G3, C4, A3  -> <3,0,2,1> (Inversion!)
+  assertEqual "CSeg of B2,F3,C3,Eb3" (0 : 3 : 1 : 2 : mempty) (toCSeg melA)
+  assertTrue "melA and melB belong to same Contour Class (I-related)"
+    (areContoursEquivalent melA melB)
 
   putStrLn "All tests passed!"

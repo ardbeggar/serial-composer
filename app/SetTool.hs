@@ -6,6 +6,7 @@ import Data.List (elemIndex, intercalate)
 import PitchClassSet
 import Polytonal
 import Neotonal
+import Contour
 import System.Environment (getArgs, getProgName)
 import System.Exit (exitFailure)
 import Text.Printf (printf)
@@ -196,6 +197,21 @@ main = do
           putStrLn "Error: Could not parse one or both pitch-class sets."
           exitFailure
 
+    ["contour", rawSeq] ->
+      case parseContourInput rawSeq of
+        Nothing -> do
+          putStrLn $ "Error: Could not parse contour sequence '" ++ rawSeq ++ "' (need >= 2 pitches like B2,F3,C3,Eb3 or 0,3,1,2)."
+          exitFailure
+        Just (lbls, vals) -> printContourAnalysis (analyzeContour lbls vals)
+
+    ["contour", rawSeqA, rawSeqB] ->
+      case (parseContourInput rawSeqA, parseContourInput rawSeqB) of
+        (Just (lblsA, valsA), Just (lblsB, valsB)) ->
+          printContourComparison (analyzeContour lblsA valsA) (analyzeContour lblsB valsB)
+        _ -> do
+          putStrLn "Error: Could not parse one or both contour sequences."
+          exitFailure
+
     [rawA, rawB] ->
       case (parseInput rawA, parseInput rawB) of
         (Just setA, Just setB) -> printComparison setA setB
@@ -222,6 +238,7 @@ main = do
       putStrLn $ "  " ++ prog ++ " poly-multi-partners <L1> <L2> [m] Rank best 3rd tonal layer to add to L1 + L2"
       putStrLn $ "  " ++ prog ++ " chords <set-or-forte-name>      Map PC set to exact, subset, superset & neighbor chords"
       putStrLn $ "  " ++ prog ++ " ifunc <setX> <setY>              Compute Lewin's IFUNC(X,Y) common-tone profile"
+      putStrLn $ "  " ++ prog ++ " contour <seq1> [seq2]           Analyze melodic contour (CSeg/COM) or compare two melodies"
       putStrLn "Examples:"
       putStrLn $ "  " ++ prog ++ " 4-Z15"
       putStrLn $ "  " ++ prog ++ " 4-Z15 4-Z29"
@@ -734,3 +751,46 @@ printIFuncReport rep = do
   putStrLn $ "IFUNC_I(X,Y):" ++ unwords [ printf "%3d" c | (_, c) <- ifInvTable rep ]
   printf   "Max Common Tones (%d): %s\n" maxI (fmtI maxILevels)
   printf   "Zero Overlap (0):     %s\n" (fmtI (ifZeroInv rep))
+
+fmtCSeg :: ContourSegment -> String
+fmtCSeg xs = "<" ++ intercalate "," (map show xs) ++ ">"
+
+printContourAnalysis :: ContourAnalysis -> IO ()
+printContourAnalysis ca = do
+  let cseg = caCSeg ca
+      n    = length cseg
+  putStrLn "=== Robert Morris Melodic Contour Analysis (CSeg & COM) ==="
+  putStrLn $ "Input Sequence:    " ++ intercalate " -> " (caInputLabels ca)
+  putStrLn $ "Contour Segment:   " ++ fmtCSeg cseg ++ " (Cardinality: " ++ show n ++ ")"
+  putStrLn $ "Prime Contour:     " ++ fmtCSeg (caPrime ca)
+  putStrLn $ "Retrograde (R):    " ++ fmtCSeg (caRetrograde ca)
+  putStrLn $ "Inversion (I):     " ++ fmtCSeg (caInversion ca)
+  putStrLn $ "Ret.-Inversion(RI):" ++ fmtCSeg (caRI ca)
+  putStrLn $ "Contour Symmetry:  " ++ intercalate ", " (caSymmetry ca)
+
+  putStrLn "\n--- Comparison Matrix (COM: '+' higher, '-' lower, '0' equal) ---"
+  putStrLn $ "      " ++ unwords [ printf "%2d" c | c <- cseg ]
+  mapM_ (\(rVal, rowChars) ->
+           putStrLn $ printf "  %2d | " rVal ++ unwords [ printf " %c" ch | ch <- rowChars ])
+        (zip cseg (caCOM ca))
+
+printContourComparison :: ContourAnalysis -> ContourAnalysis -> IO ()
+printContourComparison caA caB = do
+  let pA = caCSeg caA
+      pB = caCSeg caB
+      rels = [ lbl
+             | (lbl, form) <- [ ("P (Exact Contour)", caCSeg caA)
+                              , ("R (Retrograde)",    caRetrograde caA)
+                              , ("I (Inversion)",     caInversion caA)
+                              , ("RI (Retrograde-Inv)", caRI caA)
+                              ]
+             , form == pB
+             ]
+  putStrLn "=== Melodic Contour Equivalence Comparison ==="
+  putStrLn $ "Melody A: " ++ intercalate " -> " (caInputLabels caA)
+          ++ "  =>  CSeg " ++ fmtCSeg pA ++ " (Prime: " ++ fmtCSeg (caPrime caA) ++ ")"
+  putStrLn $ "Melody B: " ++ intercalate " -> " (caInputLabels caB)
+          ++ "  =>  CSeg " ++ fmtCSeg pB ++ " (Prime: " ++ fmtCSeg (caPrime caB) ++ ")"
+  putStrLn ""
+  putStrLn $ "Same Contour Class: " ++ if caPrime caA == caPrime caB then "YES" else "NO"
+  putStrLn $ "Exact Relation:     " ++ if null rels then "None (different contour shapes)" else intercalate ", " rels
