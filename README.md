@@ -2,7 +2,7 @@
 
 [![Haskell CI](https://github.com)](https://github.com)
 
-`SerialComposer` is a pure Haskell library suite and set of command-line tools (`serial-compose` and `set-tool`) for **N × N serial matrix generation**, **derived and all-interval row construction**, **Stravinsky rotational arrays**, **Allen Forte, John Rahn & David Lewin pitch-class set theory analysis**, **interval cycles**, **2-layer and multi-layer polytonal ambiguity & anti-resolution analysis**, **neotonal chord matching**, and **MusicXML / LilyPond score export**.
+`SerialComposer` is a pure Haskell library suite and set of command-line tools (`serial-compose` and `set-tool`) for **N × N serial matrix generation**, **derived and all-interval row construction**, **Stravinsky rotational arrays**, **Allen Forte, John Rahn & David Lewin pitch-class set theory analysis**, **Robert Morris melodic contour analysis**, **interval cycles**, **2-layer and multi-layer polytonal ambiguity & anti-resolution analysis**, **neotonal chord matching**, and **MusicXML / LilyPond score export**.
 
 See [docs/THEORY_AND_USAGE.md](docs/THEORY_AND_USAGE.md) for mathematical definitions and combined composition workflows.
 
@@ -24,7 +24,8 @@ serial-composer/
 │   ├── SerialComposer.hs (N x N matrix, invariance, rotational arrays, M5/M7, score export)
 │   ├── PitchClassSet.hs  (Forte/Rahn prime forms, catalog, K/Kh, combinatoriality, cycles, IFUNC)
 │   ├── Polytonal.hs      (2-layer & 3+ layer bitonal/polytonal friction, V7 traps, partner ranker)
-│   └── Neotonal.hs       (PC-set to rooted chord matcher, subsets/supersets & L1 neighbors)
+│   ├── Neotonal.hs       (PC-set to rooted chord matcher, subsets/supersets & L1 neighbors)
+│   └── Contour.hs        (Robert Morris melodic contour segments, COM-Matrix & equivalence)
 └── test/
     └── Spec.hs           (Automated unit test suite)
 ```
@@ -113,7 +114,7 @@ cabal run serial-compose -- -w "0,1,6,7,10" -r D --m5 --rotate --analyze
 
 ## 3. Pitch-Class Set Theory, Polytonality & Neotonal Tool (`set-tool`)
 
-`set-tool` combines Allen Forte's *The Structure of Atonal Music*, John Rahn's prime form algorithm, David Lewin's interval function (`IFUNC`), George Perle's interval cycles, 2-layer / multi-layer polytonal anti-resolution analysis, and neotonal chord matching.
+`set-tool` combines Allen Forte's *The Structure of Atonal Music*, John Rahn's prime form algorithm, David Lewin's interval function (`IFUNC`), George Perle's interval cycles, Robert Morris's melodic contour theory, 2-layer / multi-layer polytonal anti-resolution analysis, and neotonal chord matching.
 
 ### Set-Theory Commands (`PitchClassSet`)
 
@@ -130,6 +131,15 @@ cabal run serial-compose -- -w "0,1,6,7,10" -r D --m5 --rotate --analyze
 | `set-tool comb <hexachord>` | Analyze a 6-note hexachord for `P`/`R` and `I`/`RI` aggregate combinatoriality |
 | `set-tool cycle <k \| k1,k2> [start]` | Generate a basic `Ck` cycle (with all 12-tone cosets) or an alternating `Alt(k1,k2)` cycle |
 | `set-tool cycle-fit <set>` | Find all basic and alternating interval cycles containing `<set>` (marking `[CONTIGUOUS]` vs `[SUBSET]`) |
+
+### Melodic Contour Commands (`Contour`)
+
+Sequence arguments accept octave-qualified note names (`B2,F3,C3,Eb3`), MIDI numbers (`47,53,48,51`), or raw contour ranks (`0,3,1,2`).
+
+| Command | Description |
+| :--- | :--- |
+| `set-tool contour <seq>` | Compute Contour Segment (`CSeg`), `P`/`R`/`I`/`RI` forms, Prime Contour, contour symmetries, and 2D Comparison Matrix (`COM`) |
+| `set-tool contour <seq1> <seq2>` | Compare two melodies for Contour Class equivalence and identify exact `P`, `R`, `I`, or `RI` shape relation |
 
 ### Polytonality & Anti-Resolution Commands (`Polytonal`)
 
@@ -150,6 +160,13 @@ Layer arguments accept either `Root:mode` syntax (e.g., `B:phrygian`, `F:minor`,
 | `set-tool chords <set-or-forte-name>` | Map an arbitrary pitch-class set to exact rooted chords (`C == S`), embedded core chords (`C subset S`), completing extension supersets (`S subset C`), and 1-semitone voice-leading neighbors (`Dist = 1`), tagging chord families neutrally |
 
 ### Examples
+
+**Analyze melodic contour (`CSeg` & `COM-Matrix`) and compare two melodies:**
+
+```bash
+cabal run set-tool -- contour B2,F3,C3,Eb3
+cabal run set-tool -- contour B2,F3,C3,Eb3 D4,G3,C4,A3
+```
 
 **Profile directed intervals and common tones between two sets using Lewin's `IFUNC(X, Y)`:**
 
@@ -226,7 +243,7 @@ When using `serial-compose --root` (without `--octave`), octaves are selected au
 
 ## 5. Using the Libraries in GHCi
 
-Launch an interactive session with `SerialComposer`, `PitchClassSet`, `Polytonal`, and `Neotonal` loaded:
+Launch an interactive session with `SerialComposer`, `PitchClassSet`, `Polytonal`, `Neotonal`, and `Contour` loaded:
 
 ```bash
 cabal repl
@@ -237,7 +254,12 @@ import SerialComposer
 import PitchClassSet
 import Polytonal
 import Neotonal
+import Contour
 import System.Random (mkStdGen)
+
+-- Analyze melodic contour of B2 -> F3 -> C3 -> Eb3
+toCSeg (47 : 53 : 48 : 51 : mempty)         -- <0, 3, 1, 2>
+primeContour (47 : 53 : 48 : 51 : mempty)   -- <0, 3, 1, 2>
 
 -- Compute Lewin's IFUNC(X, Y) between 4-9 and 4-Z15
 let repIF = analyzeIFunc (makeSet (0 : 1 : 6 : 7 : mempty)) (makeSet (0 : 1 : 4 : 6 : mempty))
@@ -246,12 +268,6 @@ ifMaxTrans repIF
 -- Map an atonal set to embedded chords, extension supersets, and 1-semitone neighbors
 let repNeo = analyzeNeotonal (makeSet (0 : 1 : 4 : 6 : 7 : mempty))
 map cmSymbol (nrSubsets repNeo)
-
--- Analyze 3-layer polytonal independence (e.g., Guitar + Bass + Synth)
-let Just l1 = parseLayerSpec "B:min"
-let Just l2 = parseLayerSpec "F:min"
-let Just l3 = parseLayerSpec "D:maj"
-fmap mpOverallAmbiguity (analyzeMultiPoly [l1, l2, l3])
 ```
 
 ---

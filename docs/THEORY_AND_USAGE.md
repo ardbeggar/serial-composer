@@ -1,6 +1,6 @@
 # Theory & Workflow Guide
 
-This guide explains the set-theory, polytonal, and neotonal concepts implemented in `PitchClassSet`, `Polytonal`, `Neotonal`, and `SerialComposer`, along with practical composition workflows.
+This guide explains the set-theory, melodic contour, polytonal, and neotonal concepts implemented in `PitchClassSet`, `Contour`, `Polytonal`, `Neotonal`, and `SerialComposer`, along with practical composition workflows.
 
 ---
 
@@ -62,7 +62,20 @@ Given a concrete pitch-class set `A` and a target set class `B` of equal cardina
 
 ---
 
-## 2. Polytonality & Anti-Resolution Mechanics (`Polytonal`)
+## 2. Robert Morris's Melodic Contour Theory (`Contour`)
+
+Contour theory analyzes melodic shape independently of exact intervallic distance—tracking how a gesture remains recognizable even when intervals are expanded, compressed via `M5`/`M7`, or displaced across octaves:
+- **Contour Segment (`CSeg`):** Maps each note in a melody to its relative height rank (`0` = lowest distinct pitch, `1` = next higher, ..., `maxRank` = highest), preserving unisons/ties. For example, `[B2, F3, C3, Eb3]` becomes `<0, 3, 1, 2>`.
+- **Contour Transformations (`P`, `R`, `I`, `RI`):**
+  - **Retrograde (`R`):** Reverses temporal order (`<2, 1, 3, 0>`).
+  - **Inversion (`I`):** Flips vertical rank (`maxRank - c`, yielding `<3, 0, 2, 1>`).
+  - **Retrograde-Inversion (`RI`):** Applies both (`<1, 2, 0, 3>`).
+  - **Prime Contour:** The lexicographically smallest form among `{P, R, I, RI}`, used to test Contour Class equivalence (`areContoursEquivalent`).
+- **Comparison Matrix (`COM-Matrix`):** A 2D grid comparing every pair of notes `(i, j)` with `+` (`c[j] > c[i]`), `-` (`c[j] < c[i]`), or `0` (`c[j] == c[i]`).
+
+---
+
+## 3. Polytonality & Anti-Resolution Mechanics (`Polytonal`)
 
 When writing polytonal or bitonal music, sustaining ambiguity requires avoiding accidental tonal absorption or cadential discharge:
 - **Single-Scale Collapse:** If the combined union `A ∪ B` fits inside a single 7-note diatonic (`7-35`), melodic minor (`7-34`), or harmonic minor (`7-32`) scale, the ear hears upper extensions of a single key rather than two independent tonal planes.
@@ -73,7 +86,7 @@ When writing polytonal or bitonal music, sustaining ambiguity requires avoiding 
 
 ---
 
-## 3. Bridging Pitch-Class Sets & Neotonality (`Neotonal`)
+## 4. Bridging Pitch-Class Sets & Neotonality (`Neotonal`)
 
 Every rooted triad, seventh chord, extended/altered chord, suspended chord, or quartal stack is a concrete `PCSet`. `Neotonal` relates any arbitrary atonal pitch-class set `S` to rooted chords across four tiers without artificially prioritizing one voicing style over another:
 1. **Exact Chord Matches (`C == S`):** Rooted chord symbols whose exact pitch-class collection matches `S`.
@@ -83,7 +96,7 @@ Every rooted triad, seventh chord, extended/altered chord, suspended chord, or q
 
 ---
 
-## 4. Serial Matrix & Rotational Techniques (`SerialComposer`)
+## 5. Serial Matrix & Rotational Techniques (`SerialComposer`)
 
 ### 4N Row-Invariance Scanner (`--invariance`)
 Scans all `4N` forms (`P`, `R`, `I`, `RI`) of a matrix against `P0` to find transformations preserving the unordered pitch-class set (when `N < 12`), preserving discrete `k`-note partitions (trichords, tetrachords, hexachords), or locking pitches into identical ordinal positions.
@@ -93,16 +106,26 @@ Given an `N`-note row, generates all `N` cyclic rotations and transposes each ro
 
 ---
 
-## 5. Combined Composition Workflows
+## 6. Combined Composition Workflows
 
-### Workflow A: Connecting Two Different Chords or Sections via Lewin's `IFUNC`
+### Workflow A: Tracking Melodic Gesture Across Interval Stretches (`Contour`)
+1. **Extract the Contour Segment (`CSeg`) and `COM-Matrix` of a core riff motif:**
+   ```bash
+   cabal run set-tool -- contour B2,F3,C3,Eb3
+   ```
+2. **Verify whether an inverted, retrograde, or octave-displaced variation preserves the same Contour Class:**
+   ```bash
+   cabal run set-tool -- contour B2,F3,C3,Eb3 D4,G3,C4,A3
+   ```
+
+### Workflow B: Connecting Two Different Chords or Sections via Lewin's `IFUNC`
 1. **Profile all 12 transpositions and inversions between Section A's set `X` and Section B's set `Y`:**
    ```bash
    cabal run set-tool -- ifunc 0,1,6,7 0,1,4,6
    ```
 2. Choose a `Tn` or `TnI` level with maximum common tones (`Max Common Tones`) for smooth pivot voice-leading, or `Zero Overlap` for an abrupt textural break.
 
-### Workflow B: Bridging Atonal Cells into Neotonal Harmony
+### Workflow C: Bridging Atonal Cells into Neotonal Harmony
 1. **Take an atonal harmonic cell from your row or rotational array** (e.g., `0,1,4,6,7`).
 2. **Inspect embedded triads/sevenths, completing extensions, and 1-semitone voice-leading neighbors:**
    ```bash
@@ -110,7 +133,7 @@ Given an `N`-note row, generates all `N` cyclic rotations and transposes each ro
    ```
 3. Use a 1-semitone neighbor chord to pivot smoothly from a dense atonal riff into an open neotonal cadence—or vice versa.
 
-### Workflow C: Designing a Non-Resolving Bitonal & Polytonal Progression
+### Workflow D: Designing a Non-Resolving Bitonal & Polytonal Progression
 1. **Find high-ambiguity bitonal partners for a base scale or chord** (e.g., `B Phrygian` or `B Minor triad`):
    ```bash
    cabal run set-tool -- poly-partners B:phrygian
@@ -126,7 +149,7 @@ Given an `N`-note row, generates all `N` cyclic rotations and transposes each ro
    cabal run set-tool -- poly-step B:maj F:maj D:min Ab:min
    ```
 
-### Workflow D: Building & Transforming a Derived 12-Tone Row
+### Workflow E: Building & Transforming a Derived 12-Tone Row
 1. **Pick a core trichord or tetrachord** (e.g., `3-5` `(0,1,6)` — minor second + tritone).
 2. **Generate a 12-tone derived row, inspect its segments, and scan all 48 matrix forms for segment-preserving counter-rows:**
    ```bash
