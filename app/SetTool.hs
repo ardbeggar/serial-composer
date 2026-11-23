@@ -5,6 +5,7 @@ import Data.Char (isSpace, toUpper)
 import Data.List (elemIndex, intercalate)
 import PitchClassSet
 import Polytonal
+import Neotonal
 import System.Environment (getArgs, getProgName)
 import System.Exit (exitFailure)
 import Text.Printf (printf)
@@ -181,6 +182,13 @@ main = do
           putStrLn "Error: Could not parse one or more tonal layers."
           exitFailure
 
+    ["chords", rawSet] ->
+      case parseInput rawSet of
+        Nothing -> do
+          putStrLn $ "Error: Could not parse pitch-class set or Forte name '" ++ rawSet ++ "'."
+          exitFailure
+        Just pcs -> printNeotonalReport (analyzeNeotonal pcs)
+
     [rawA, rawB] ->
       case (parseInput rawA, parseInput rawB) of
         (Just setA, Just setB) -> printComparison setA setB
@@ -205,6 +213,7 @@ main = do
       putStrLn $ "  " ++ prog ++ " poly-partners <layerA> [mode]     Rank highest-ambiguity bitonal partners"
       putStrLn $ "  " ++ prog ++ " poly-multi <L1> <L2> <L3> [...]   Analyze 3+ simultaneous tonal layers"
       putStrLn $ "  " ++ prog ++ " poly-multi-partners <L1> <L2> [m] Rank best 3rd tonal layer to add to L1 + L2"
+      putStrLn $ "  " ++ prog ++ " chords <set-or-forte-name>      Map PC set to exact, subset, superset & neighbor chords"
       putStrLn "Examples:"
       putStrLn $ "  " ++ prog ++ " 4-Z15"
       putStrLn $ "  " ++ prog ++ " 4-Z15 4-Z29"
@@ -659,3 +668,37 @@ printMultiPolyPartners baseLayers mMode = do
     lastSafe [x]      = x
     lastSafe (_ : xs) = lastSafe xs
     lastSafe _        = PolyLayer "?" Nothing mempty
+
+printNeotonalReport :: NeotonalReport -> IO ()
+printNeotonalReport rep = do
+  let s = nrInputSet rep
+      notes = intercalate "," (map pcName s)
+  printf "=== Neotonal Chord Mapping for %s [%s] (Forte %s) ===\n"
+    (formatSet s) notes (forteName s)
+
+  putStrLn "\n--- 1. Exact Chord Matches (C == S) ---"
+  if null (nrExact rep)
+    then putStrLn "  None"
+    else mapM_ printMatch (nrExact rep)
+
+  putStrLn "\n--- 2. Embedded Core Chords (C subset S) ---"
+  if null (nrSubsets rep)
+    then putStrLn "  None"
+    else mapM_ printMatch (take 10 (nrSubsets rep))
+
+  putStrLn "\n--- 3. Completing Extension Chords (S subset C) ---"
+  if null (nrSupersets rep)
+    then putStrLn "  None"
+    else mapM_ printMatch (take 10 (nrSupersets rep))
+
+  putStrLn "\n--- 4. 1-Semitone Voice-Leading Neighbors (Dist = 1) ---"
+  if null (nrNeighbors rep)
+    then putStrLn "  None"
+    else mapM_ printMatch (take 10 (nrNeighbors rep))
+  where
+    printMatch cm =
+      printf "  %-14s [%-14s]  %-15s | %s\n"
+        (cmSymbol cm)
+        (cmTag cm)
+        ("[" ++ intercalate "," (map pcName (cmPitches cm)) ++ "]")
+        (cmExtraInfo cm)

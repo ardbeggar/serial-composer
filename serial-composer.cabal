@@ -27,7 +27,8 @@ library
     import:           warnings
     exposed-modules:  SerialComposer,
                       PitchClassSet,
-                      Polytonal
+                      Polytonal,
+                      Neotonal
     build-depends:    base >= 4.16 && < 5,
                       random >= 1.2
     hs-source-dirs:   src
