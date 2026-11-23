@@ -73,6 +73,9 @@ module PitchClassSet
 
   , findR0Sets
   , trichordProfile
+
+  , allTranspositions
+  , allInversions
   ) where
 
 import Data.List (find, intercalate, minimumBy, nub, permutations, sort, subsequences, tails)
@@ -100,6 +103,18 @@ transposeSet n = makeSet . map (+ n)
 -- | Inverts a set around 0 and transposes by @n@ (TnI).
 invertSet :: Int -> PCSet -> PCSet
 invertSet n = makeSet . map (\x -> n - x)
+
+-- | Returns all 12 transpositions @(n, Tn(S))@ for @n = 0..11@.
+allTranspositions :: PCSet -> [(Int, PCSet)]
+allTranspositions raw =
+  let s = makeSet raw
+   in [ (n, transposeSet n s) | n <- enumFromTo 0 11 ]
+
+-- | Returns all 12 inversions @(n, TnI(S))@ for @n = 0..11@.
+allInversions :: PCSet -> [(Int, PCSet)]
+allInversions raw =
+  let s = makeSet raw
+   in [ (n, invertSet n s) | n <- enumFromTo 0 11 ]
 
 -- | Applies multiplicative transformation @x -> (k * x) mod 12@ to a pitch-class set.
 -- For @k = 5@ (M5) and @k = 7@ (M7), this is a bijection on Z12 swapping ic1 and ic5.

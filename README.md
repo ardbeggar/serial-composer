@@ -132,6 +132,7 @@ cabal run serial-compose -- -w "0,1,6,7,10" -r D --m5 --rotate --analyze
 | `set-tool comb <hexachord>` | Analyze a 6-note hexachord for `P`/`R` and `I`/`RI` aggregate combinatoriality |
 | `set-tool cycle <k \| k1,k2> [start]` | Generate a basic `Ck` cycle (with all 12-tone cosets) or an alternating `Alt(k1,k2)` cycle |
 | `set-tool cycle-fit <set>` | Find all basic and alternating interval cycles containing `<set>` (marking `[CONTIGUOUS]` vs `[SUBSET]`) |
+| `set-tool orbit <set-or-forte-name>` | List all 12 concrete transpositions (`T0`..`T11`) and inversions (`T0I`..`T11I`) with pitch-class integers and note names |
 
 ### Melodic Contour Commands (`Contour`)
 
@@ -231,6 +232,12 @@ cabal run set-tool -- poly-step B:maj F:maj D:min Ab:min
 cabal run set-tool -- poly-partners B:min min
 cabal run set-tool -- poly-multi B:min F:min D:maj
 cabal run set-tool -- poly-multi-partners B:min F:min maj
+```
+**List all 24 concrete `Tn` and `TnI` forms of a set:**
+
+```bash
+cabal run set-tool -- orbit 3-5
+cabal run set-tool -- orbit 0,1,4,6,7
 ```
 
 ---

@@ -219,6 +219,13 @@ main = do
           exitFailure
         Just pcs -> printFingerprintReport pcs
 
+    ["orbit", rawSet] ->
+      case parseInput rawSet of
+        Nothing -> do
+          putStrLn $ "Error: Could not parse pitch-class set or Forte name '" ++ rawSet ++ "'."
+          exitFailure
+        Just pcs -> printSetOrbit pcs
+
     [rawA, rawB] ->
       case (parseInput rawA, parseInput rawB) of
         (Just setA, Just setB) -> printComparison setA setB
@@ -247,6 +254,7 @@ main = do
       putStrLn $ "  " ++ prog ++ " ifunc <setX> <setY>              Compute Lewin's IFUNC(X,Y) common-tone profile"
       putStrLn $ "  " ++ prog ++ " contour <seq1> [seq2]           Analyze melodic contour (CSeg/COM) or compare two melodies"
       putStrLn $ "  " ++ prog ++ " fingerprint <set-or-forte-name> Show 12-trichord embedding vector & R0 contrast sets"
+
       putStrLn "Examples:"
       putStrLn $ "  " ++ prog ++ " 4-Z15"
       putStrLn $ "  " ++ prog ++ " 4-Z15 4-Z29"
@@ -838,3 +846,24 @@ printFingerprintReport pcs = do
                     (intercalate "," (map show (fePrime e)))
                     (formatVector (feVector e)))
                r0Sets
+
+printSetOrbit :: PCSet -> IO ()
+printSetOrbit pcs = do
+  let s      = makeSet pcs
+      trans  = allTranspositions s
+      invs   = allInversions s
+  printf "=== Complete Tn / TnI Orbit for %s [%s] (Forte %s) ===\n\n"
+    (formatSet s) (intercalate "," (map pcName s)) (forteName s)
+  putStrLn "--- Transpositions (Tn) ---          --- Inversions (TnI) ---"
+  mapM_ (\((tn, tSet), (inN, iSet)) -> do
+           let leftCol  = fmtRow ("T" ++ show tn ++ ":") tSet
+               rightCol = fmtRow ("T" ++ show inN ++ "I:") iSet
+           printf "%-38s %s\n" leftCol rightCol)
+        (zip trans invs)
+  where
+    fmtRow :: String -> PCSet -> String
+    fmtRow lbl xs =
+      printf "  %-5s %-18s [%s]"
+        lbl
+        (formatSet xs)
+        (intercalate "," (map pcName xs))

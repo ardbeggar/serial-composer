@@ -137,4 +137,11 @@ main = do
   assertEqual "12-trichord profile has 12 slots" 12 (length prof535)
   assertEqual "5-35 total embedded trichords == 5 choose 3 (10)" 10 (sum (map snd prof535))
 
+  -- 13. Complete Tn / TnI orbit enumeration
+  assertEqual "allTranspositions returns 12 forms" 12 (length (allTranspositions trichord35))
+  assertEqual "allInversions returns 12 forms" 12 (length (allInversions trichord35))
+  assertEqual "T6 of (0,1,6) == (0,6,7)"
+    (0 : 6 : 7 : mempty)
+    (snd (allTranspositions trichord35 !! 6))
+
   putStrLn "All tests passed!"
